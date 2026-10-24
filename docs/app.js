@@ -1,26 +1,35 @@
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const callbacks=[
- {id:1,host:"LAB-WIN01",user:"lab\\operator",os:"Windows 11",ip:"10.10.0.21",agent:"apollo",c2:"http",status:"live",last:"12s ago",desc:"Windows C# agent — demo record"},
- {id:2,host:"LAB-MAC02",user:"labuser",os:"macOS 14",ip:"10.10.0.34",agent:"apfell",c2:"http",status:"live",last:"41s ago",desc:"macOS JXA agent — demo record"},
- {id:3,host:"LAB-LIN03",user:"root",os:"Ubuntu 24.04",ip:"10.10.0.47",agent:"poseidon",c2:"websocket",status:"live",last:"8s ago",desc:"Go agent, Linux/macOS — demo record"},
- {id:4,host:"LAB-WIN04",user:"svc_test",os:"Windows Server 2022",ip:"10.10.0.58",agent:"athena",c2:"http",status:"idle",last:"6m ago",desc:".NET agent, beta proxy support — demo record"},
- {id:5,host:"LAB-LIN05",user:"analyst",os:"Debian 12",ip:"10.10.0.63",agent:"medusa",c2:"http",status:"dead",last:"2h ago",desc:"Python agent — demo record"},
+ {id:1,host:"LAB-WIN01",user:"lab\\operator",os:"Windows 11",ip:"10.10.0.21",agent:"apollo",c2:"http",status:"live",last:"12s ago",op:"ATMA Lab",desc:"Windows C# agent — demo record"},
+ {id:2,host:"LAB-MAC02",user:"labuser",os:"macOS 14",ip:"10.10.0.34",agent:"apfell",c2:"http",status:"live",last:"41s ago",op:"ATMA Lab",desc:"macOS JXA agent — demo record"},
+ {id:3,host:"LAB-LIN03",user:"root",os:"Ubuntu 24.04",ip:"10.10.0.47",agent:"poseidon",c2:"websocket",status:"live",last:"8s ago",op:"ATMA Lab",desc:"Go agent, Linux/macOS — demo record"},
+ {id:4,host:"LAB-WIN04",user:"svc_test",os:"Windows Server 2022",ip:"10.10.0.58",agent:"athena",c2:"http",status:"idle",last:"6m ago",op:"ATMA Lab",desc:".NET agent, beta proxy support — demo record"},
+ {id:5,host:"LAB-LIN05",user:"analyst",os:"Debian 12",ip:"10.10.0.63",agent:"medusa",c2:"http",status:"dead",last:"2h ago",op:"ATMA Lab",desc:"Python agent — demo record"},
 ];
 let selected=callbacks[0];
-let tasks={1:[{cmd:"whoami",out:"lab\\operator (simulated)"},{cmd:"pwd",out:"C:\\Users\\operator\\Desktop (simulated)"}],2:[],3:[],4:[],5:[]};
+let tasks={1:[{cmd:"whoami",out:"lab\\operator (simulated)",status:"completed"}],2:[],3:[],4:[],5:[]};
+let cbFilter="";
+const commands={
+ apollo:["shell","ls","pwd","whoami","ps","download","upload","screenshot","sleep","exit","link","socks","inject","execute_assembly"],
+ apfell:["shell","ls","pwd","whoami","ps","download","upload","screenshot","sleep","exit"],
+ poseidon:["shell","ls","pwd","whoami","ps","download","upload","sleep","exit","link"],
+ athena:["shell","ls","pwd","whoami","ps","download","upload","screenshot","sleep","exit","socks"],
+ medusa:["shell","ls","pwd","whoami","ps","download","upload","sleep","exit","run_python"],
+};
 const simOutput=(cb,cmd)=>{
  const c=cmd.trim().toLowerCase();
- if(c==="help") return "Demo commands: whoami, pwd, ls, ps, shell <text>, download <file>, screenshot, link, exit. All output is simulated.";
+ if(c==="help") return "Demo commands for "+cb.agent+": "+(commands[cb.agent]||commands.apollo).join(", ")+". All output is simulated. Task lifecycle in real Mythic: preprocessing → submitted → processing → processed → completed / error.";
  if(c==="whoami") return cb.user+" (simulated)";
  if(c==="pwd") return cb.os.includes("Windows")?"C:\\Users\\operator (simulated)":"/home/"+cb.user.split("\\").pop()+" (simulated)";
- if(c==="ls") return cb.os.includes("Windows")?"Desktop  Documents  Downloads  (simulated)":"Desktop  Documents  Downloads  (simulated)";
- if(c==="ps") return "PID  NAME\n  412  explorer.exe (simulated)\n  918  apollo.exe (simulated — demo record, not a real process)";
+ if(c==="ls") return "Desktop  Documents  Downloads  (simulated)";
+ if(c==="ps") return "PID  NAME\n  412  explorer.exe (simulated)\n  918  agent (simulated — demo record, not a real process)";
  if(c==="screenshot") return "[Simulated screenshot placeholder — no image is captured. A real Mythic agent would return a file download.]";
- if(c.startsWith("shell ")) return "Simulated shell output for: "+esc(cmd.slice(6))+" — no command was executed on any host.";
- if(c.startsWith("download ")) return "Simulated download request queued for "+esc(cmd.slice(9))+" — no file was transferred.";
- if(c==="exit"||c==="link") return "Simulated: "+c+" acknowledged in demo mode only.";
- return "Unknown demo command. Type: help";
+ if(c.startsWith("shell ")) return "Simulated shell output for: "+cmd.slice(6)+" — no command was executed on any host.";
+ if(c.startsWith("download ")) return "Simulated download request queued for "+cmd.slice(9)+" — no file was transferred.";
+ if(c.startsWith("run_python ")) return "Simulated Python output for: "+cmd.slice(11)+" — no code was executed.";
+ if(c==="exit"||c==="link"||c==="socks") return "Simulated: "+c+" acknowledged in demo mode only.";
+ return "Unknown demo command for "+cb.agent+". Type: help";
 };
 const agents=[
  {name:"apollo",os:"Windows",lang:"C#",c2:["http","smb","tcp","websocket"],note:"Windows-focused, process migration and assembly execution in a real deployment."},
@@ -36,26 +45,46 @@ const c2profiles=[
  {name:"tcp",desc:"Peer-to-peer TCP channel (Poseidon and others).",p2p:true},
  {name:"websocket",desc:"WebSocket callback channel.",p2p:false},
 ];
+const operations=[
+ {name:"ATMA Lab",lead:"Stephen (demo)",members:[["Stephen","lead"],["operator-1","operator"],["auditor","spectator"]],blocklists:["spectator: no tasking, no payload creation, read-only"],alerts:"Demo operation — no Slack webhook configured in demo mode."},
+];
+const demoFiles=[
+ {name:"screenshot_001.png",host:"LAB-WIN01",agent:"apollo",size:"142 KB",kind:"screenshot"},
+ {name:"report.txt",host:"LAB-LIN03",agent:"poseidon",size:"3 KB",kind:"task output"},
+ {name:"ls_output.txt",host:"LAB-MAC02",agent:"apfell",size:"1 KB",kind:"task output"},
+];
 function viewDashboard(){
- return `<h1>Mythic, at a glance</h1><p class="muted">A cross-platform, post-exploitation red-team framework built with Go, Docker, and a browser UI. Mythic itself is controlled with <code>mythic-cli</code> and runs as Docker containers — it does <b>not</b> run on GitHub Pages. This app is the front-end console, demo data, and assistant for it.</p>
+ return `<h1>Mythic, at a glance</h1><p class="muted">A cross-platform, post-exploitation red-team framework built with Go, Docker, and a browser UI. Mythic itself is controlled with <code>mythic-cli</code> and runs as Docker containers — it does <b>not</b> run on GitHub Pages. This app is the front-end console, demo data, and assistant for it, and — when you point it at your own Mythic server in Connect — a client for that server.</p>
  <div class="grid">
   <div class="card stat"><b>${callbacks.filter(c=>c.status==="live").length}</b><span>Live demo callbacks</span></div>
-  <div class="card stat"><b>${callbacks.length}</b><span>Total demo callbacks</span></div>
+  <div class="card stat"><b>${operations.length}</b><span>Demo operations</span></div>
   <div class="card stat"><b>${agents.length}</b><span>Payload types shown</span></div>
-  <div class="card stat"><b>${c2profiles.length}</b><span>C2 profiles shown</span></div>
+  <div class="card stat"><b>${demoFiles.length}</b><span>Demo files</span></div>
  </div>
  <div class="card"><h2>How Mythic fits together</h2><p><b>Operator UI → Mythic server (Go + Postgres + RabbitMQ, in Docker) → C2 profile → agent/payload on a host → callback → tasks and output.</b> Payload types and C2 profiles are installed separately into a real instance, e.g. <code>./mythic-cli install github https://github.com/MythicAgents/apfell</code> and <code>./mythic-cli install github https://github.com/MythicC2Profiles/http</code>. The Mythic repo itself hosts no payload types or C2 profiles.</p>
- <p class="muted">Use this console only against systems you own or are explicitly authorised to test. Demo callbacks here are fictional lab records — nothing here connects to, scans, or executes on a real host.</p></div>
+ <p class="muted">Use this console only against systems you own or are explicitly authorised to test. Demo callbacks here are fictional lab records — nothing here connects to, scans, or executes on a real host unless you configure your own Mythic server in Connect.</p></div>
+ <div class="card"><h2>Deployment checklist</h2><p>✅ Pages site live (verified this session) · ✅ Console + demo data in repo · ✅ AI demo knowledge base · ⏳ Groq browser key (optional, Connect) · ⏳ Workflow copy for PROJECT_ATMA briefing (manual, see README) · ⏳ Your own Mythic server (Docker, on your host — required for real callbacks, not for this demo)</p></div>
  <div class="card"><h2>Latest briefing</h2><div id="briefBox" class="muted">Loading briefing…</div></div>`;
 }
 function viewCallbacks(){
- const rows=callbacks.map(c=>`<tr class="${c.id===selected.id?'sel':''}" onclick="selectCb(${c.id})"><td><b>${esc(c.host)}</b><br><span class="muted">${esc(c.desc)}</span></td><td>${esc(c.agent)}</td><td>${esc(c.c2)}</td><td>${esc(c.os)}</td><td>${esc(c.ip)}</td><td><span class="badge ${c.status==='live'?'live':c.status==='idle'?'':'dead'}">${c.status}</span> ${esc(c.last)}</td></tr>`).join("");
- const hist=(tasks[selected.id]||[]).map(t=>`<div><code>&gt; ${esc(t.cmd)}</code><pre>${t.out}</pre></div>`).join("")||`<p class="muted">No tasks yet for this demo callback.</p>`;
- return `<h1>Callbacks</h1><p class="muted">Select a callback, then issue a demo task. Output is simulated and labelled as such.</p>
- <div class="card"><table><tr><th>Host</th><th>Agent</th><th>C2</th><th>OS</th><th>IP (demo)</th><th>Status</th></tr>${rows}</table></div>
- <div class="card"><h2>${esc(selected.host)} — ${esc(selected.agent)} over ${esc(selected.c2)}</h2><p class="muted">${esc(selected.user)} · ${esc(selected.os)} · ${esc(selected.ip)} · Last check-in ${esc(selected.last)}</p>
+ const list=callbacks.filter(c=>(c.host+c.agent+c.os+c.op).toLowerCase().includes(cbFilter.toLowerCase()));
+ const rows=list.map(c=>`<tr class="${c.id===selected.id?'sel':''}" onclick="selectCb(${c.id})"><td><b>${esc(c.host)}</b><br><span class="muted">${esc(c.desc)}</span></td><td>${esc(c.agent)}</td><td>${esc(c.c2)}</td><td>${esc(c.os)}</td><td>${esc(c.ip)}</td><td><span class="badge ${c.status==='live'?'live':c.status==='idle'?'':'dead'}">${c.status}</span> ${esc(c.last)}</td></tr>`).join("")||`<tr><td colspan="6" class="muted">No callbacks match that filter.</td></tr>`;
+ const cmds=(commands[selected.agent]||[]).map(c=>`<button class="btn2" onclick="pickCmd('${c}')">${c}</button>`).join(" ");
+ const hist=(tasks[selected.id]||[]).map(t=>`<div><code>&gt; ${esc(t.cmd)}</code> <span class="badge live">${t.status||"completed"}</span><pre>${t.out}</pre></div>`).join("")||`<p class="muted">No tasks yet for this demo callback.</p>`;
+ return `<h1>Callbacks</h1><p class="muted">Select a callback, pick a command, then issue a demo task. Real Mythic task lifecycle: preprocessing → submitted → processing → processed → completed / error. Here, output is simulated.</p>
+ <div class="card"><input class="field" id="cbSearch" value="${esc(cbFilter)}" placeholder="Filter callbacks by host, agent, OS, or operation…" oninput="setFilter(this.value)"><table><tr><th>Host</th><th>Agent</th><th>C2</th><th>OS</th><th>IP (demo)</th><th>Status</th></tr>${rows}</table></div>
+ <div class="card"><h2>${esc(selected.host)} — ${esc(selected.agent)} over ${esc(selected.c2)}</h2><p class="muted">${esc(selected.user)} · ${esc(selected.os)} · ${esc(selected.ip)} · Operation: ${esc(selected.op)} · Last check-in ${esc(selected.last)}</p>
+ <p>${cmds}</p>
  <div style="display:flex;gap:8px"><input class="field" id="taskInput" placeholder="Type a demo task, e.g. whoami" style="margin:0"><button class="btn" onclick="issueTask()">Issue task</button></div>
  <div style="margin-top:12px">${hist}</div></div>`;
+}
+function viewOperations(){
+ const op=operations[0];
+ return `<h1>Operations</h1><p class="muted">Mythic groups callbacks, tasks, payloads, and files under an operation, with roles controlling who can do what.</p>
+ <div class="card"><h2>${op.name}</h2><p>Lead: ${op.lead}</p><table><tr><th>Member</th><th>Role</th><th>What that means</th></tr>
+ ${op.members.map(m=>`<tr><td>${esc(m[0])}</td><td>${esc(m[1])}</td><td>${m[1]==="lead"?"Full control of the operation":m[1]==="operator"?"Normal operator: create payloads, issue tasking": "Read-only: search and view, no tasking, no payload creation"}</td></tr>`).join("")}</table>
+ <h3>Block lists</h3><p>${op.blocklists.join("<br>")}</p><p class="muted">Block lists are the middle ground between operator and spectator: named lists of commands an operator is not allowed to execute for a specific payload type.</p>
+ <h3>Alerting</h3><p class="muted">${op.alerts} In real Mythic, an operation can set a Slack webhook; new callbacks from alert-able payloads trigger it, and individual payloads can be excluded.</p></div>`;
 }
 function viewPayloads(){
  const opts=agents.map(a=>`<option value="${a.name}">${a.name} — ${a.os}</option>`).join("");
@@ -65,9 +94,10 @@ function viewPayloads(){
  <label>C2 profile</label><select class="field" id="pbC2"><option>http</option><option>dynamichttp</option><option>smb</option><option>tcp</option><option>websocket</option></select>
  <label>Callback host (your lab server, for the config summary only)</label><input class="field" id="pbHost" placeholder="e.g. 10.10.0.10 — do not use a target you are not authorised to test">
  <label>Callback interval (seconds)</label><input class="field" id="pbInt" type="number" value="10">
+ <label>Commands to include</label><input class="field" id="pbCmds" placeholder="e.g. shell, ls, whoami (leave blank for the agent default set)">
  <button class="btn" onclick="buildPayload()">Generate configuration summary</button>
  <div id="pbOut" style="margin-top:12px"></div></div>
- <div class="card"><h2>Payload types in this console</h2>${agents.map(a=>`<p><b>${a.name}</b> — ${a.os} · ${a.lang} · C2: ${a.c2.join(", ")}<br><span class="muted">${a.note}</span></p>`).join("")}</div>`;
+ <div class="card"><h2>Payload types in this console</h2>${agents.map(a=>`<p><b>${a.name}</b> — ${a.os} · ${a.lang} · C2: ${a.c2.join(", ")} · Commands: ${(commands[a.name]||[]).join(", ")}<br><span class="muted">${a.note}</span></p>`).join("")}<p class="muted">For the full, current list, use Catalog Import — it fetches the public MythicAgents and MythicC2Profiles org listings from GitHub.</p></div>`;
 }
 function viewC2(){
  return `<h1>C2 Profiles</h1><p class="muted">A C2 profile is the channel an agent uses to check in. Direct profiles talk to the Mythic server; peer-to-peer (P2P) profiles link agents together inside a network so only one needs egress.</p>
@@ -75,31 +105,46 @@ function viewC2(){
  <div class="card"><h2>Install into your own Mythic instance</h2><pre>sudo ./mythic-cli install github https://github.com/MythicC2Profiles/http
 sudo ./mythic-cli start</pre><p class="muted">Full setup, screenshots, and examples are in the official Mythic documentation.</p></div>`;
 }
+function viewFiles(){
+ return `<h1>Files</h1><p class="muted">In real Mythic, files downloaded from callbacks, screenshots, and task output land in the file browser for the operation. Demo files below are placeholders — no file is transferred.</p>
+ <div class="card"><table><tr><th>File</th><th>Host</th><th>Agent</th><th>Size</th><th>Kind</th></tr>${demoFiles.map(f=>`<tr><td>${esc(f.name)}</td><td>${esc(f.host)}</td><td>${esc(f.agent)}</td><td>${esc(f.size)}</td><td>${esc(f.kind)}</td></tr>`).join("")}</table></div>`;
+}
+function viewCatalog(){
+ const saved=localStorage.getItem("atma_catalog");
+ return `<h1>Catalog Import</h1><p class="muted">Import the public tool listings from GitHub — no key needed, unauthenticated GitHub API (60 requests/hour). This imports <b>metadata only</b> (repo name, description, link). It does not install, download, or run any agent or C2 profile.</p>
+ <div class="card"><button class="btn" onclick="importCatalog()">Import from MythicAgents + MythicC2Profiles</button> <button class="btn2" onclick="clearCatalog()">Clear imported catalog</button><div id="catalogOut" style="margin-top:12px">${saved?`<p class="muted">Imported catalog saved in this browser. Click Import again to refresh.</p><pre>${esc(saved.slice(0,4000))}</pre>`:`<p class="muted">No imported catalog yet.</p>`}</div></div>
+ <div class="card"><h2>Built-in catalog</h2><p><b>Agents:</b> ${agents.map(a=>a.name).join(", ")}<br><b>C2 profiles:</b> ${c2profiles.map(p=>p.name).join(", ")}</p><p class="muted">Install commands for any imported repo follow the same pattern: <code>./mythic-cli install github https://github.com/&lt;org&gt;/&lt;repo&gt;</code> — run inside your own Mythic instance, after reviewing the repo.</p></div>`;
+}
 function viewDocs(){
  return `<h1>Mythic Guide</h1>
  <div class="card"><h2>Start a real Mythic instance (on your own machine, not on Pages)</h2><pre>sudo make          # builds mythic-cli, from the Mythic repo root
 sudo ./mythic-cli start
-# then open the Mythic web UI on your host and install agents / C2 profiles</pre></div>
- <div class="card"><h2>Core concepts</h2><p><b>Callback:</b> a registered agent session on a host. <b>Task:</b> a command issued to a callback; output returns as a task result. <b>Payload type:</b> an agent implementation (apollo, apfell, poseidon…). <b>C2 profile:</b> the transport (http, smb, tcp, websocket…). <b>Operation:</b> Mythic groups callbacks/tasks for reporting and collaboration.</p>
- <p><b>Files / downloads:</b> in real Mythic, agent output files land in the server file browser. This demo does not transfer files.</p></div>
+# then open the Mythic web UI on your host and install agents / C2 profiles
+sudo ./mythic-cli update   # check for updates; it does not apply them for you</pre></div>
+ <div class="card"><h2>Core concepts</h2><p><b>Callback:</b> a registered agent session on a host. <b>Task:</b> a command issued to a callback; output returns as a task result, through preprocessing → submitted → processing → processed → completed / error. <b>Payload type:</b> an agent implementation (apollo, apfell, poseidon…). <b>C2 profile:</b> the transport (http, smb, tcp, websocket…). <b>Operation:</b> Mythic groups callbacks/tasks for reporting and collaboration, with lead / operator / spectator roles and per-operator block lists. <b>Files:</b> downloads and screenshots from callbacks land in the operation file browser.</p></div>
+ <div class="card"><h2>Connecting this console to your own Mythic server</h2><p>Pages is a different origin from your Mythic host, so a direct browser connection will usually be blocked by CORS or by Mythic's own auth. Practical, authorised options: (1) use this console in demo mode for planning and learning; (2) use Mythic's own UI on your Mythic host for real operations; (3) if you run a reverse proxy for your Mythic instance, point Connect at that proxy origin with your operator credentials stored only in this browser — the Test Connection button reports exactly what the browser sees (HTTP status, CORS block, or GraphQL error) instead of claiming success. This app never bypasses Mythic authentication and never contacts a Mythic server you have not configured.</p></div>
  <div class="card"><h2>Security model of this Pages app</h2><p>GitHub Pages serves static files only — there is no server to hide a key in. So: (1) the repo secret <code>PROJECT_ATMA</code> is <b>never</b> put in this JavaScript bundle; (2) it is used only inside GitHub Actions, where the runner can read it and the log never prints it, to refresh <code>docs/ai-briefing.json</code>; (3) live chat from your browser uses a Groq key <b>you</b> paste in Connect, stored only in your browser's localStorage. Remove it any time from Connect.</p></div>`;
 }
 function viewConnect(){
  const hasKey=!!localStorage.getItem("atma_groq_key");
  const model=localStorage.getItem("atma_groq_model")||"llama-3.3-70b-versatile";
  const mUrl=localStorage.getItem("atma_mythic_url")||"";
+ const mPath=localStorage.getItem("atma_mythic_gql")||"/graphql";
  return `<h1>Connect / AI Keys</h1>
  <div class="card"><h2>AI assistant — Groq (browser key, local only)</h2><p class="muted">Status: <b>${hasKey?"Key saved in this browser":"No key saved — demo mode"}</b>. A saved key is sent only from your browser to api.groq.com. It is never committed to the repo and never sent to GitHub Pages.</p>
  <label>Groq API key</label><input class="field" id="groqKey" type="password" placeholder="${hasKey?"Key saved — paste a new one to replace it":"Paste your Groq key here"}">
  <label>Model</label><input class="field" id="groqModel" value="${esc(model)}">
  <button class="btn" onclick="saveGroq()">Save key in this browser</button> <button class="btn2" onclick="clearGroq()">Remove saved key</button></div>
- <div class="card"><h2>Mythic server (optional, demo only here)</h2><p class="muted">Static Pages cannot safely proxy a Mythic server, and this build does not connect to one. If you run your own Mythic instance, keep its URL/token in this browser only and use its own UI for real operations.</p>
- <label>Mythic URL (local only)</label><input class="field" id="mythicUrl" value="${esc(mUrl)}" placeholder="https://your-mythic-host:7443">
- <button class="btn2" onclick="saveMythic()">Save URL locally</button></div>
+ <div class="card"><h2>Mythic server — client mode (your server, your credentials, local only)</h2><p class="muted">Demo mode is the default. To try a real connection, enter <b>your own</b> Mythic host, GraphQL path, and operator token. Nothing here is sent anywhere except to the URL you enter, from your browser. Test Connection reports the real result — it does not fake a connection.</p>
+ <label>Mythic base URL</label><input class="field" id="mythicUrl" value="${esc(mUrl)}" placeholder="https://your-mythic-host:7443">
+ <label>GraphQL path</label><input class="field" id="mythicGql" value="${esc(mPath)}">
+ <label>Operator token / auth header value (local only)</label><input class="field" id="mythicToken" type="password" placeholder="Paste only if your Mythic setup uses a bearer token">
+ <button class="btn" onclick="testMythic()">Test connection</button> <button class="btn2" onclick="saveMythic()">Save URL locally</button><div id="mythicTest" style="margin-top:10px"></div></div>
+ <div class="card"><h2>Operational access scope — stated plainly</h2><p>Full scope <i>within this console</i> means: every view (dashboard, callbacks, operations, payloads, C2, files, catalog, guide) is present and functional in demo mode, the AI knows the full operational model, and the client can attempt a connection to a Mythic server you configure. It does <b>not</b> mean this public Pages site has access to any Mythic server, can log in as you, or can run operations on hosts you have not authorised. Real operational access lives in your own Mythic deployment, under its own operator accounts, roles, and block lists — this console is a client for it, not a replacement for its authentication.</p></div>
  <div class="card"><h2>Repo secret — PROJECT_ATMA</h2><p>This secret is <b>not</b> readable from the browser and is <b>not</b> in this app. Its only use in this repo is the GitHub Actions workflow (copy <code>github-workflows/groq-briefing.yml</code> to <code>.github/workflows/groq-briefing.yml</code> — GitHub Apps cannot create workflow files directly, so that one step is manual). That workflow runs on demand, reads <code>secrets.PROJECT_ATMA</code> as the Groq key inside the runner, asks Groq for a short public Mythic briefing, and commits only the resulting <code>docs/ai-briefing.json</code>. The key itself is never printed or committed.</p></div>`;
 }
 
-const views={dashboard:viewDashboard,callbacks:viewCallbacks,payloads:viewPayloads,c2:viewC2,docs:viewDocs,connect:viewConnect};
+const views={dashboard:viewDashboard,callbacks:viewCallbacks,operations:viewOperations,payloads:viewPayloads,c2:viewC2,files:viewFiles,catalog:viewCatalog,docs:viewDocs,connect:viewConnect};
 let current="dashboard";
 function render(){
  $("#main").innerHTML=views[current]();
@@ -117,22 +162,50 @@ function loadBriefing(){
 function updateAiPill(){
  const has=!!localStorage.getItem("atma_groq_key");
  $("#aiPill").textContent=has?"AI: Groq (browser key)":"AI: Offline demo";
+ const m=localStorage.getItem("atma_mythic_url");
+ $("#modePill").textContent=m?"DEMO DATA — Mythic URL saved locally, not connected":"DEMO DATA — no real Mythic server connected";
 }
 window.selectCb=id=>{selected=callbacks.find(c=>c.id===id); render();};
+window.setFilter=v=>{cbFilter=v; const el=$("#cbSearch"); const pos=el?el.selectionStart:0; render(); const n=$("#cbSearch"); if(n){n.focus(); n.setSelectionRange(pos,pos);}};
+window.pickCmd=c=>{const i=$("#taskInput"); if(i){i.value=c; i.focus();}};
 window.issueTask=()=>{
  const v=$("#taskInput").value.trim(); if(!v) return;
- (tasks[selected.id]=tasks[selected.id]||[]).push({cmd:v,out:simOutput(selected,v)});
+ (tasks[selected.id]=tasks[selected.id]||[]).push({cmd:v,out:simOutput(selected,v),status:"completed"});
  render();
 };
 window.buildPayload=()=>{
- const a=$("#pbAgent").value, os=$("#pbOs").value, c2=$("#pbC2").value, host=$("#pbHost").value||"YOUR-CALLBACK-HOST", interval=$("#pbInt").value||"10";
+ const a=$("#pbAgent").value, os=$("#pbOs").value, c2=$("#pbC2").value, host=$("#pbHost").value||"YOUR-CALLBACK-HOST", interval=$("#pbInt").value||"10", cmds=$("#pbCmds").value.trim()||(commands[a]||[]).join(", ");
  const info=agents.find(x=>x.name===a);
- const summary={payload_type:a,os,c2_profile:c2,callback_host:host,callback_interval_seconds:Number(interval),note:"Configuration summary only — no payload was built, compiled, or delivered.",install_commands:[`sudo ./mythic-cli install github https://github.com/MythicAgents/${a}`,`sudo ./mythic-cli install github https://github.com/MythicC2Profiles/${c2}`]};
+ const summary={payload_type:a,os,c2_profile:c2,callback_host:host,callback_interval_seconds:Number(interval),commands:cmds.split(",").map(s=>s.trim()).filter(Boolean),note:"Configuration summary only — no payload was built, compiled, or delivered.",install_commands:[`sudo ./mythic-cli install github https://github.com/MythicAgents/${a}`,`sudo ./mythic-cli install github https://github.com/MythicC2Profiles/${c2}`]};
  $("#pbOut").innerHTML=`<p><b>${a}</b> — ${info.os} · ${info.lang}<br><span class="muted">${info.note}</span></p><pre>${esc(JSON.stringify(summary,null,2))}</pre><p class="muted">Run those install commands inside your own Mythic instance, then create the payload from its UI with the parameters above.</p>`;
 };
+window.importCatalog=async()=>{
+ const out=$("#catalogOut"); out.innerHTML="<p class='muted'>Fetching public org listings from GitHub…</p>";
+ try{
+  const [ag,c2]=await Promise.all([fetch("https://api.github.com/orgs/MythicAgents/repos?per_page=100").then(r=>{if(!r.ok) throw new Error("MythicAgents HTTP "+r.status); return r.json();}),fetch("https://api.github.com/orgs/MythicC2Profiles/repos?per_page=100").then(r=>{if(!r.ok) throw new Error("MythicC2Profiles HTTP "+r.status); return r.json();})]);
+  const fmt=list=>list.map(r=>({name:r.name,description:r.description,url:r.html_url}));
+  const data={imported_at:new Date().toISOString(),agents:fmt(ag),c2_profiles:fmt(c2)};
+  localStorage.setItem("atma_catalog",JSON.stringify(data));
+  out.innerHTML=`<p><b>Imported:</b> ${data.agents.length} agent repos, ${data.c2_profiles.length} C2 profile repos. Saved in this browser.</p><pre>${esc(JSON.stringify(data,null,2).slice(0,6000))}</pre>`;
+ }catch(e){ out.innerHTML=`<p>Import failed: ${esc(e.message)}. This is usually GitHub's unauthenticated rate limit (60/hour) or a network block. The built-in catalog above still works.</p>`; }
+};
+window.clearCatalog=()=>{localStorage.removeItem("atma_catalog"); render();};
 window.saveGroq=()=>{const k=$("#groqKey").value.trim(); if(!k){alert("Paste a Groq key first.");return;} localStorage.setItem("atma_groq_key",k); localStorage.setItem("atma_groq_model",$("#groqModel").value.trim()||"llama-3.3-70b-versatile"); render(); addMsg("assistant","Groq key saved in this browser only. Ask me something and I will answer live via Groq.");};
 window.clearGroq=()=>{localStorage.removeItem("atma_groq_key"); render(); addMsg("assistant","Saved Groq key removed. Back to offline demo mode.");};
-window.saveMythic=()=>{localStorage.setItem("atma_mythic_url",$("#mythicUrl").value.trim()); alert("Saved locally in this browser only. This demo build does not connect to a Mythic server.");};
+window.saveMythic=()=>{localStorage.setItem("atma_mythic_url",$("#mythicUrl").value.trim()); localStorage.setItem("atma_mythic_gql",$("#mythicGql").value.trim()||"/graphql"); if($("#mythicToken").value.trim()) localStorage.setItem("atma_mythic_token",$("#mythicToken").value.trim()); render(); addMsg("assistant","Mythic URL saved locally in this browser only. Use Test Connection to check what the browser can actually reach.");};
+window.testMythic=async()=>{
+ const url=$("#mythicUrl").value.trim(), path=$("#mythicGql").value.trim()||"/graphql", token=$("#mythicToken").value.trim()||localStorage.getItem("atma_mythic_token")||"";
+ const out=$("#mythicTest"); if(!url){out.innerHTML="<p>Enter a Mythic base URL first.</p>"; return;}
+ out.innerHTML="<p class='muted'>Testing… (this only talks to the URL you entered, from your browser)</p>";
+ try{
+  const headers={"Content-Type":"application/json"}; if(token) headers["Authorization"]="Bearer "+token;
+  const r=await fetch(url.replace(/\/$/,"")+path,{method:"POST",headers,body:JSON.stringify({query:"{ callback { id } }"})});
+  const txt=await r.text();
+  out.innerHTML=`<p><b>GraphQL endpoint responded: HTTP ${r.status}.</b></p><pre>${esc(txt.slice(0,1000))}</pre><p class="muted">If this is not a callback list, your Mythic GraphQL schema/path or auth differs — check your Mythic instance's own UI/docs, and do not paste production credentials into a public demo.</p>`;
+ }catch(e){
+  out.innerHTML=`<p><b>Browser could not reach that endpoint: ${esc(e.message)}.</b></p><p class="muted">Common causes: the Mythic host is not running, is not reachable from this device, or the browser blocked it for CORS / mixed-content (Pages is HTTPS, so an http:// Mythic URL will be blocked). Fix is on the Mythic-host side — a same-origin reverse proxy, or using Mythic's own UI on that host. Demo mode remains available.</p>`;
+ }
+};
 document.querySelectorAll("nav button[data-view]").forEach(b=>b.addEventListener("click",()=>{current=b.dataset.view; render();}));
 function addMsg(who,text){
  const d=document.createElement("div"); d.className="msg"+(who==="you"?" me":"");
@@ -140,13 +213,19 @@ function addMsg(who,text){
  $("#chat").appendChild(d); $("#chat").scrollTop=$("#chat").scrollHeight;
 }
 function demoAnswer(q){
- q=q.toLowerCase();
- if(q.includes("callback")) return "In Mythic, a callback is a registered agent session on a host. Operators issue tasks to a callback (like whoami or ls in this demo) and results come back as task output. Callbacks check in on an interval with jitter over their C2 profile.";
- if(q.includes("payload")||q.includes("apollo")||q.includes("apfell")||q.includes("poseidon")||q.includes("athena")||q.includes("medusa")) return "Payload types are agent implementations installed separately into Mythic: apollo (Windows, C#), apfell (macOS, JXA), poseidon (Linux/macOS, Go), athena (Windows, .NET), medusa (cross-platform, Python). Use the Payload Builder tab for a configuration summary — this Pages app does not build real payloads.";
- if(q.includes("c2")||q.includes("http")||q.includes("smb")||q.includes("websocket")) return "C2 profiles are the transport: http/dynamichttp for direct egress, websocket for WebSocket callbacks, and smb/tcp as peer-to-peer channels that link agents so only one needs a route out.";
- if(q.includes("start")||q.includes("install")||q.includes("docker")) return "On your own machine: sudo make to build mythic-cli, then sudo ./mythic-cli start to bring up the Docker containers. Install agents with ./mythic-cli install github <agent repo> and C2 profiles the same way. GitHub Pages cannot run those containers.";
- if(q.includes("groq")||q.includes("key")||q.includes("secret")) return "Security model here: the repo secret PROJECT_ATMA is never in this browser bundle. It is only used inside a GitHub Actions workflow to refresh docs/ai-briefing.json. Live chat from your browser needs a Groq key you paste in Connect, stored only in localStorage.";
- return "Mythic is a cross-platform red-team framework (Go + Docker + browser UI) for authorised operators, managers, and reporting. Try asking about callbacks, payload types, C2 profiles, or how to start a real instance — or open the Mythic Guide tab. Note: this demo answers from a built-in knowledge base unless you add a Groq key in Connect.";
+ const l=q.toLowerCase();
+ if(l.includes("how many callback")) return "Demo mode right now: "+callbacks.length+" callbacks, "+callbacks.filter(c=>c.status==="live").length+" live. In a real Mythic instance that number comes from your operation's callback list, not from this page.";
+ if(l.includes("operation")) return "Operations group callbacks, tasks, payloads, and files for reporting and collaboration. Roles: lead (full control), operator (normal tasking and payload creation), spectator (read-only). Block lists let you forbid specific commands for a specific operator and payload type. See the Operations tab.";
+ if(l.includes("task")&&l.includes("lifecycle")||l.includes("preprocessing")||l.includes("submitted")) return "Task lifecycle in Mythic: preprocessing (payload-type command file validates the task) → submitted (ready for the agent) → processing (agent pulled it) → processed (at least one response) → completed, or error if the agent reports failure. You can filter tasks in the callback view in Mythic's own UI.";
+ if(l.includes("file")) return "Files in Mythic: downloads, screenshots, and task output from callbacks land in the operation's file browser. This console's Files tab shows demo placeholders only — no file is transferred here.";
+ if(l.includes("callback")) return "In Mythic, a callback is a registered agent session on a host. Operators issue tasks to a callback (like whoami or ls in this demo) and results come back as task output. Callbacks check in on an interval with jitter over their C2 profile. Dead callbacks have missed check-ins; linked (P2P) callbacks may show long gaps because they only check in when they have data.";
+ if(l.includes("payload")||l.includes("apollo")||l.includes("apfell")||l.includes("poseidon")||l.includes("athena")||l.includes("medusa")) return "Payload types are agent implementations installed separately into Mythic: apollo (Windows, C#), apfell (macOS, JXA), poseidon (Linux/macOS, Go), athena (Windows, .NET), medusa (cross-platform, Python). Commands per agent are in the Payload Builder tab, and Catalog Import fetches the current public org listings. This Pages app does not build real payloads.";
+ if(l.includes("c2")||l.includes("smb")||l.includes("websocket")||l.includes("http")) return "C2 profiles are the transport: http/dynamichttp for direct egress, websocket for WebSocket callbacks, and smb/tcp as peer-to-peer channels that link agents so only one needs a route out. See the C2 tab, and Catalog Import for the current MythicC2Profiles list.";
+ if(l.includes("start")||l.includes("install")||l.includes("docker")||l.includes("deploy")) return "On your own machine: sudo make to build mythic-cli, then sudo ./mythic-cli start to bring up the Docker containers. Install agents with ./mythic-cli install github <agent repo> and C2 profiles the same way. Use ./mythic-cli update to check for updates (it does not apply them). GitHub Pages cannot run those containers — Pages hosts only this console.";
+ if(l.includes("troubleshoot")||l.includes("dead")||l.includes("not connect")||l.includes("cors")) return "If a callback is dead, check its last check-in, C2 profile, and whether the host can still reach the Mythic server. If this console cannot reach your Mythic server, the Test Connection button in Connect reports the real browser error — most often CORS or HTTPS mixed-content, fixed with a same-origin reverse proxy or by using Mythic's own UI on that host.";
+ if(l.includes("groq")||l.includes("key")||l.includes("secret")) return "Security model here: the repo secret PROJECT_ATMA is never in this browser bundle. It is only used inside a GitHub Actions workflow to refresh docs/ai-briefing.json. Live chat from your browser needs a Groq key you paste in Connect, stored only in localStorage.";
+ if(l.includes("scope")||l.includes("full")||l.includes("access")) return "Full scope in this console means all views are present (dashboard, callbacks, operations, payloads, C2, files, catalog, guide), the AI covers the full operational model, and Connect can attempt a connection to a Mythic server you configure. It does not give this public Pages site access to any Mythic server, and it never bypasses Mythic authentication. Real operational access is in your own Mythic deployment, under its operator accounts and roles.";
+ return "Mythic is a cross-platform red-team framework (Go + Docker + browser UI) for authorised operators, managers, and reporting. Try asking about callbacks, operations, task lifecycle, payload types, C2 profiles, files, deployment, or troubleshooting — or open the Mythic Guide tab. Note: this demo answers from a built-in knowledge base unless you add a Groq key in Connect.";
 }
 async function ask(){
  const inp=$("#chatInput"); const q=inp.value.trim(); if(!q) return; inp.value="";
@@ -156,7 +235,7 @@ async function ask(){
  addMsg("assistant","Thinking via Groq…");
  const model=localStorage.getItem("atma_groq_model")||"llama-3.3-70b-versatile";
  try{
-  const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model,messages:[{role:"system",content:"You are ATMA, a helpful assistant for the Mythic red-team platform. Answer concisely, accurately, and only for authorised defensive/red-team use. Do not help with unauthorised access."},{role:"user",content:q}],temperature:0.3,max_tokens:800})});
+  const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model,messages:[{role:"system",content:"You are ATMA, a helpful assistant for the Mythic red-team platform. Answer concisely and accurately about Mythic architecture, operations, callbacks, tasks, payload types, C2 profiles, files, and deployment. Only for authorised defensive/red-team use. Do not help with unauthorised access, and do not claim this Pages app runs a Mythic server or builds real payloads."},{role:"user",content:q}],temperature:0.3,max_tokens:900})});
   const j=await r.json();
   const last=$("#chat").lastElementChild;
   if(!r.ok) last.querySelector("div:last-child").textContent="Groq error ("+r.status+"): "+(j.error&&j.error.message?j.error.message:"check your key/model in Connect.");
@@ -166,4 +245,4 @@ async function ask(){
 $("#sendBtn").addEventListener("click",ask);
 $("#chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault(); ask();}});
 render();
-addMsg("assistant","Hi — I'm ATMA. This console runs on demo data. Ask about Mythic callbacks, payloads, or C2, or add your Groq key in Connect for live answers.");
+addMsg("assistant","Hi — I'm ATMA. Pages is live, and this console now covers dashboard, callbacks, operations, payloads, C2, files, and catalog import. Ask about Mythic operations, task lifecycle, or deployment — or add your Groq key in Connect for live answers.");

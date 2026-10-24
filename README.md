@@ -2,26 +2,26 @@
 
 A functional front-end GUI for the [Mythic platform](https://github.com/its-a-feature/Mythic), built as a zero-build static app for GitHub Pages, with an integrated AI assistant.
 
-Live (after Pages is enabled, below): **https://etienne0101-lab.github.io/Project-ATMA/**
+Live (Pages enabled 2026-10-24, verified loading): **https://etienne0101-lab.github.io/Project-ATMA/**
 
 ## What is in the app (`docs/`)
 
-- **Dashboard** — Mythic architecture at a glance, live demo callback counts, and the latest AI briefing.
-- **Callbacks** — Demo callback table (apollo, apfell, poseidon, athena, medusa). Select one and issue demo tasks (`whoami`, `pwd`, `ls`, `ps`, `shell`, `download`, `screenshot`, `help`). All output is simulated and labelled as such.
+- **Dashboard** — Mythic architecture at a glance, demo callback counts, deployment checklist, and the latest AI briefing.
+- **Callbacks** — Demo callback table (apollo, apfell, poseidon, athena, medusa) with search, per-agent command picker, and task history. Select one and issue demo tasks (`whoami`, `pwd`, `ls`, `ps`, `shell`, `download`, `screenshot`, `help`). All output is simulated and labelled as such.
+- **Operations** — Roles (lead / operator / spectator), block lists, and alerting, as in real Mythic.
 - **Payload Builder** — Configuration-only builder. It produces a JSON configuration summary and the `mythic-cli install github …` commands for your own Mythic instance. It does **not** compile, download, or deliver a real payload/agent.
 - **C2 Profiles** — http, dynamichttp, smb, tcp, websocket, with direct vs peer-to-peer notes.
-- **Mythic Guide** — How a real Mythic instance starts (`sudo make`, `sudo ./mythic-cli start`), core concepts, and this app's security model.
-- **ATMA Assistant (right panel)** — Ask about Mythic. Without a key it answers from a built-in demo knowledge base. With a Groq key saved in **Connect**, it answers live via Groq from your browser.
+- **Files** — Demo file browser (downloads, screenshots, task output placeholders).
+- **Catalog Import** — Fetches the public MythicAgents and MythicC2Profiles repo listings from GitHub (metadata only, no install/download/run) and saves them in the browser.
+- **Connect / Mythic client mode** — Save your own Mythic URL, GraphQL path, and operator token locally (browser only) and run Test Connection, which reports the real HTTP/CORS/GraphQL result instead of faking a connection.
+- **Mythic Guide** — How a real Mythic instance starts (`sudo make`, `sudo ./mythic-cli start`), core concepts, task lifecycle, connecting this console to your own server, and this app's security model.
+- **ATMA Assistant (right panel)** — Ask about Mythic operations, task lifecycle, payloads, C2, files, deployment, and troubleshooting. Without a key it answers from a built-in knowledge base. With a Groq key saved in **Connect**, it answers live via Groq from your browser.
 
-## Enable GitHub Pages (one manual step)
+## GitHub Pages
 
-GitHub Pages is a repo setting, not a file:
+Enabled 2026-10-24: Settings → Pages → Deploy from a branch → `main` / `/docs`.
 
-1. Repo → **Settings → Pages**
-2. **Build and deployment → Source: Deploy from a branch**
-3. **Branch: `main`, folder: `/docs`** → Save
-
-The site then serves at https://etienne0101-lab.github.io/Project-ATMA/
+The site serves at https://etienne0101-lab.github.io/Project-ATMA/
 
 ## Groq / the `PROJECT_ATMA` secret — read this first
 
