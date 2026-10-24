@@ -1,0 +1,28 @@
+[Unit]
+Description=Mythic server (native, no Docker)
+After=network.target postgresql.service rabbitmq-server.service
+Wants=postgresql.service rabbitmq-server.service
+
+[Service]
+Type=simple
+User=mythic
+Group=mythic
+WorkingDirectory=/opt/mythic/bin
+EnvironmentFile=/opt/mythic/.env
+# mythic_server reads .env from the executable's directory AND migrations
+# from database/migrations relative to WorkingDirectory — both are in /opt/mythic/bin.
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1 && break; sleep 2; done; pg_isready -h 127.0.0.1 -p 5432'
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do rabbitmqctl ping >/dev/null 2>&1 && break; sleep 2; done'
+ExecStart=/opt/mythic/bin/mythic_server
+Restart=on-failure
+RestartSec=5
+# Dynamic ports 7000-7010 (SOCKS / RPFWD / interactive) need privileged binds only if <1024 — they are not, so no CAP needed.
+# If you ever bind mythic_server itself below 1024, add AmbientCapabilities=CAP_NET_BIND_SERVICE.
+NoNewPrivileges=false
+ProtectSystem=strict
+ReadWritePaths=/opt/mythic /var/lib/mythic
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+[Unit]
+Description=Mythic native agent/C2 service %i (no Docker)
+After=network.target mythic-server.service rabbitmq-server.service
+Wants=mythic-server.service rabbitmq-server.service
+
+[Service]
+Type=simple
+User=mythic
+Group=mythic
+# %i is the service directory name under /opt/mythic/InstalledServices/<name>.
+# Each service must provide either main.py (Python, mythic-container) or a
+# compiled main binary, plus rabbitmq_config.json pointing at 127.0.0.1:5672
+# and mythic_server gRPC on 127.0.0.1:17444.
+# Python example — override ExecStart for Go services in an override file:
+#   systemctl edit mythic-agent@poseidon
+WorkingDirectory=/opt/mythic/InstalledServices/%i
+ExecStart=/usr/bin/python3 main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
