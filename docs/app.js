@@ -216,6 +216,7 @@ window.dispatchMission=async()=>{
 };
 window.clearGhToken=()=>{localStorage.removeItem("atma_gh_token"); render();};
 function updateAiPill(){
+ const bp=$("#bundlePill"); if(bp) bp.textContent="Bundle: serverless-3";
  const has=!!localStorage.getItem("atma_groq_key");
  $("#aiPill").textContent=has?"AI: Groq (browser key)":"AI: Offline demo";
  const m=localStorage.getItem("atma_mythic_url");
