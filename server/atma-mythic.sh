@@ -16,6 +16,7 @@
 # in this Muse sandbox (which has no Docker or Go, and is ephemeral).
 #
 #   bash server/atma-mythic.sh check
+#   bash server/atma-mythic.sh install-docker   # only if check says Docker is missing
 #   bash server/atma-mythic.sh build
 #   bash server/atma-mythic.sh start
 #   bash server/atma-mythic.sh install-lab
@@ -73,6 +74,34 @@ cmd_clone() {
     mkdir -p "$(dirname "$MYTHIC_DIR")"
     git clone https://github.com/its-a-feature/Mythic "$MYTHIC_DIR"
   fi
+}
+
+cmd_install_docker() {
+  # Only for a Linux host Stephen chose (Option A). Uses Mythic's own
+  # installer for the detected distro, after an explicit YES prompt.
+  # It needs sudo, installs Docker + Compose, and usually requires
+  # logging out/in (or `newgrp docker`) before Docker works without sudo.
+  if command -v docker >/dev/null 2>&1; then
+    echo "ATMA: Docker is already installed — nothing to do."
+    docker --version; return 0
+  fi
+  cmd_clone
+  local id=""; [ -f /etc/os-release ] && id=$(grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+  local script=""
+  case "$id" in
+    ubuntu) script="install_docker_ubuntu.sh" ;;
+    debian) script="install_docker_debian.sh" ;;
+    kali) script="install_docker_kali.sh" ;;
+    *) die "unsupported distro for auto-install (ID=$id). Install Docker + Compose manually for your distro, then re-run check." ;;
+  esac
+  [ -f "$MYTHIC_DIR/$script" ] || die "Mythic installer $script not found in $MYTHIC_DIR"
+  echo "ATMA: about to run Mythic's own installer: $script (distro: $id)"
+  echo "ATMA: review it first: less $MYTHIC_DIR/$script"
+  printf 'Type YES to run it with sudo: '; read -r ans
+  [ "$ans" = "YES" ] || die "aborted — Docker not installed"
+  sudo bash "$MYTHIC_DIR/$script"
+  echo "ATMA: Docker installer finished. Log out/in (or run 'newgrp docker'),"
+  echo "ATMA: then re-run: bash server/atma-mythic.sh check"
 }
 
 cmd_build() {
@@ -145,11 +174,12 @@ cmd_logs() {
 
 case "${1:-help}" in
   check) cmd_check ;;
+  install-docker) cmd_install_docker ;;
   build) cmd_build ;;
   start) cmd_start "${2:-}" ;;
   install-lab) cmd_install_lab ;;
   status) cmd_status ;;
   stop) cmd_stop ;;
   logs) cmd_logs "${2:-mythic_server}" ;;
-  *) echo "Usage: $0 {check|build|start|install-lab|status|stop|logs [container]}"; exit 1 ;;
+  *) echo "Usage: $0 {check|install-docker|build|start|install-lab|status|stop|logs [container]}"; exit 1 ;;
 esac

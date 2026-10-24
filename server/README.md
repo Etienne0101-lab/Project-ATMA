@@ -62,9 +62,16 @@ costs. Ranked by feasibility:
 
 ## Recommended sequence
 
-1. **Host:** a Linux machine you control (laptop, homelab box, or VPS)
-   with Docker + Compose plugin. `atma-mythic.sh check` tells you
-   what's missing.
+1. **Host:** a Linux machine you control (laptop, homelab box, or VPS).
+   Get this repo onto it first:
+   ```
+   git clone https://github.com/Etienne0101-lab/Project-ATMA
+   cd Project-ATMA
+   bash server/atma-mythic.sh check
+   ```
+   If `check` says Docker is missing, and your distro is Ubuntu,
+   Debian, or Kali: `bash server/atma-mythic.sh install-docker`
+   (prompts for YES, runs Mythic's own installer, then log out/in).
 2. **Build:** `bash server/atma-mythic.sh build`
 3. **Start:** `bash server/atma-mythic.sh start`
    - UI: https://127.0.0.1:7443 (self-signed cert — expect a warning)
