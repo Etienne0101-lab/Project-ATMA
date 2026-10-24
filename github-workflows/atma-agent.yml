@@ -1,0 +1,65 @@
+# Project ATMA — agent mission (serverless backend)
+# INSTALL (manual, once): copy this file to .github/workflows/atma-agent.yml
+# GitHub Apps cannot create workflow files directly, so this copy is manual.
+# TRIGGER: Actions tab -> "ATMA agent mission" -> Run workflow, OR from the
+# ATMA console's Missions tab (with a GitHub token saved locally in the
+# browser), OR: gh workflow run atma-agent.yml -f mission_id=m1 -f prompt="..."
+# WHAT IT DOES: runs agent/atma-agent.mjs with secrets.PROJECT_ATMA as the
+# Groq key inside the runner, writes docs/backend/missions/<id>.json and
+# updates docs/backend/missions/index.json, then commits both.
+# WHAT IT NEVER DOES: print or commit the key; connect to a Mythic server;
+# build or deliver payloads.
+name: ATMA agent mission
+on:
+  workflow_dispatch:
+    inputs:
+      mission_id:
+        description: "Mission id (letters, numbers, dashes)"
+        required: true
+      prompt:
+        description: "Prompt for the ATMA analysis agent"
+        required: true
+      kind:
+        description: "Mission kind"
+        required: false
+        default: "analysis"
+      model:
+        description: "Groq model"
+        required: false
+        default: "llama-3.3-70b-versatile"
+permissions:
+  contents: write
+jobs:
+  mission:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run ATMA agent
+        env:
+          GROQ_API_KEY: ${{ secrets.PROJECT_ATMA }}
+        run: |
+          node agent/atma-agent.mjs \
+            --mission "${{ inputs.mission_id }}" \
+            --kind "${{ inputs.kind }}" \
+            --model "${{ inputs.model }}" \
+            --prompt "${{ inputs.prompt }}" \
+            --out "docs/backend/missions/${{ inputs.mission_id }}.json"
+      - name: Update missions index
+        run: |
+          node -e "
+          const fs=require('fs');
+          const dir='docs/backend/missions';
+          const files=fs.readdirSync(dir).filter(f=>f.endsWith('.json')&&f!=='index.json').sort();
+          const missions=files.map(f=>{try{const j=JSON.parse(fs.readFileSync(dir+'/'+f,'utf8'));return{mission:j.mission,kind:j.kind,model:j.model,source:j.source,completed_at:j.completed_at,prompt:j.prompt,output:(j.output||'').slice(0,2000)};}catch{return null;}}).filter(Boolean);
+          fs.writeFileSync(dir+'/index.json',JSON.stringify({missions,updated:new Date().toISOString()},null,2)+'\n');
+          "
+      - name: Commit mission output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/backend/missions/
+          git diff --cached --quiet || git commit -m "ATMA mission ${{ inputs.mission_id }} (${{ inputs.kind }})"
+          git push

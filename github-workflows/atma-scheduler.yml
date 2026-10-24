@@ -1,0 +1,31 @@
+# Project ATMA — scheduler tick (serverless backend)
+# INSTALL (manual, once): copy this file to .github/workflows/atma-scheduler.yml
+# GitHub Apps cannot create workflow files directly, so this copy is manual.
+# WHAT IT DOES: once a day + on manual dispatch, runs agent/atma-scheduler.mjs,
+# which writes ONLY docs/backend/status.json (its own file — the OpenForge
+# rule that a tick writes no file any other writer writes), then commits if changed.
+# It does NOT call Groq on every tick, so it does not burn API quota.
+name: ATMA scheduler
+on:
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Scheduler tick
+        run: node agent/atma-scheduler.mjs
+      - name: Commit status if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/backend/status.json
+          git diff --cached --quiet || git commit -m "ATMA scheduler tick"
+          git push

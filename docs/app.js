@@ -144,12 +144,33 @@ function viewConnect(){
  <div class="card"><h2>Repo secret — PROJECT_ATMA</h2><p>This secret is <b>not</b> readable from the browser and is <b>not</b> in this app. Its only use in this repo is the GitHub Actions workflow (copy <code>github-workflows/groq-briefing.yml</code> to <code>.github/workflows/groq-briefing.yml</code> — GitHub Apps cannot create workflow files directly, so that one step is manual). That workflow runs on demand, reads <code>secrets.PROJECT_ATMA</code> as the Groq key inside the runner, asks Groq for a short public Mythic briefing, and commits only the resulting <code>docs/ai-briefing.json</code>. The key itself is never printed or committed.</p></div>`;
 }
 
-const views={dashboard:viewDashboard,callbacks:viewCallbacks,operations:viewOperations,payloads:viewPayloads,c2:viewC2,files:viewFiles,catalog:viewCatalog,docs:viewDocs,connect:viewConnect};
+function viewMissions(){
+ return `<h1>Missions — serverless backend</h1><p class="muted">Missions run in GitHub Actions, not in this browser. A mission takes a few minutes: the workflow calls Groq with the repo secret inside the runner, commits its output to <code>docs/backend/missions/</code>, and this tab reads it back as static JSON. That is the OpenForge Actions-as-backend pattern, replicated for ATMA.</p>
+ <div class="card"><h2>Request a mission</h2><p class="muted">Option 1 (no token): run this on any machine with <code>gh</code> authenticated to this repo. Option 2: save a GitHub token in this browser only (fine-grained, this repo, <code>actions:write</code>) and dispatch from here — the token is sent only to api.github.com, never committed.</p>
+ <label>Mission id</label><input class="field" id="mId" placeholder="e.g. mythic-overview">
+ <label>Prompt</label><textarea class="field" id="mPrompt" placeholder="e.g. Summarise Mythic operations and roles for a new operator"></textarea>
+ <label>Kind</label><select class="field" id="mKind"><option>analysis</option><option>briefing</option><option>mission</option></select>
+ <label>GitHub token (optional, local only)</label><input class="field" id="ghToken" type="password" placeholder="${localStorage.getItem("atma_gh_token")?"Token saved — paste a new one to replace it":"Paste a fine-grained GitHub token (actions:write, this repo only)"}">
+ <button class="btn" onclick="dispatchMission()">Dispatch mission</button> <button class="btn2" onclick="clearGhToken()">Remove saved token</button><div id="mOut" style="margin-top:10px"></div>
+ <pre id="mCmd">gh workflow run atma-agent.yml -f mission_id=YOUR-ID -f prompt="YOUR PROMPT" -f kind=analysis
+# Workflows must first be copied from github-workflows/ to .github/workflows/ (see Backend tab).</pre></div>
+ <div class="card"><h2>Mission results</h2><div id="missionsList" class="muted">Loading missions…</div></div>`;
+}
+function viewBackend(){
+ return `<h1>Backend — serverless, OpenForge-style</h1><p class="muted">No persistent server. GitHub Actions is the borrowed backend, git is the database. Each workflow owns only its own files, so ticks, missions, and probes cannot overwrite each other.</p>
+ <div class="card"><h2>Status</h2><div id="backendStatus" class="muted">Loading status…</div></div>
+ <div class="card"><h2>Key health</h2><div id="backendKey" class="muted">Loading key status…</div></div>
+ <div class="card"><h2>Install the workflows (one manual step)</h2><p class="muted">GitHub Apps cannot create workflow files, so copy each file from <code>github-workflows/</code> to <code>.github/workflows/</code> in this repo, once: <code>atma-agent.yml</code>, <code>atma-scheduler.yml</code>, <code>atma-key-probe.yml</code>, <code>groq-briefing.yml</code>. After that, the scheduler ticks daily, and missions/probes run on dispatch.</p></div>
+ <div class="card"><h2>What this backend cannot do</h2><p class="muted">Real-time chat (workflows take minutes), persistent connections, Mythic callbacks, live C2, or payload builds. Those need your own Mythic server (see <code>server/</code>). The optional companion gateway (<code>agent/atma-gateway.mjs</code>) is the Tier 2 alternative: run it on your host, point Connect at it, and it proxies Groq with your local key.</p></div>`;
+}
+const views={dashboard:viewDashboard,callbacks:viewCallbacks,operations:viewOperations,payloads:viewPayloads,c2:viewC2,files:viewFiles,catalog:viewCatalog,missions:viewMissions,backend:viewBackend,docs:viewDocs,connect:viewConnect};
 let current="dashboard";
 function render(){
  $("#main").innerHTML=views[current]();
  document.querySelectorAll("nav button[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===current));
  if(current==="dashboard") loadBriefing();
+ if(current==="missions") loadMissions();
+ if(current==="backend") loadBackend();
  updateAiPill();
 }
 function loadBriefing(){
@@ -159,6 +180,37 @@ function loadBriefing(){
   $("#briefPill").textContent="Briefing: "+(j.source||"starter");
  }).catch(()=>{const el=$("#briefBox"); if(el) el.textContent="Starter briefing not loaded — the workflow briefing will appear here after its first run.";});
 }
+function loadMissions(){
+ fetch("backend/missions/index.json").then(r=>r.json()).then(j=>{
+  const el=$("#missionsList"); if(!el) return;
+  if(!j.missions || !j.missions.length){ el.innerHTML=`<p>No missions yet. ${esc(j.note||"")}</p>`; return; }
+  el.innerHTML=j.missions.map(m=>`<div style="margin-bottom:14px"><b>${esc(m.mission)}</b> <span class="badge">${esc(m.kind||"")}</span> <span class="badge">${esc(m.source||"")}</span> <span class="muted">${esc(m.completed_at||"")}</span><p class="muted">Prompt: ${esc(m.prompt||"")}</p><pre>${esc(m.output||"")}</pre></div>`).join("");
+ }).catch(()=>{const el=$("#missionsList"); if(el) el.textContent="Missions index not loaded — it appears after the first mission workflow runs.";});
+}
+function loadBackend(){
+ fetch("backend/status.json").then(r=>r.json()).then(j=>{
+  const el=$("#backendStatus"); if(el) el.innerHTML=`<pre>${esc(JSON.stringify(j,null,2))}</pre>`;
+ }).catch(()=>{const el=$("#backendStatus"); if(el) el.textContent="Status not loaded.";});
+ fetch("backend/key-status.json").then(r=>r.json()).then(j=>{
+  const el=$("#backendKey"); if(el) el.innerHTML=`<pre>${esc(JSON.stringify(j,null,2))}</pre>`;
+ }).catch(()=>{const el=$("#backendKey"); if(el) el.textContent="Key status not loaded.";});
+}
+window.dispatchMission=async()=>{
+ const id=$("#mId").value.trim(), prompt=$("#mPrompt").value.trim(), kind=$("#mKind").value;
+ const tok=$("#ghToken").value.trim();
+ const out=$("#mOut");
+ if(!id || !prompt){ out.innerHTML="<p>Enter a mission id and a prompt first.</p>"; return; }
+ if(tok) localStorage.setItem("atma_gh_token",tok);
+ const token=tok||localStorage.getItem("atma_gh_token")||"";
+ if(!token){ out.innerHTML=`<p class="muted">No GitHub token saved. Use this command instead (workflows must be installed first):</p><pre>gh workflow run atma-agent.yml -f mission_id=${esc(id)} -f prompt=${esc(JSON.stringify(prompt))} -f kind=${esc(kind)}</pre>`; return; }
+ out.innerHTML="<p class='muted'>Dispatching workflow…</p>";
+ try{
+  const r=await fetch("https://api.github.com/repos/Etienne0101-lab/Project-ATMA/actions/workflows/atma-agent.yml/dispatches",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token,"Accept":"application/vnd.github+json"},body:JSON.stringify({ref:"main",inputs:{mission_id:id,prompt,kind}})});
+  if(r.status===204) out.innerHTML="<p><b>Mission dispatched.</b> It runs in GitHub Actions (a few minutes). Refresh this tab after the workflow commits its output.</p>";
+  else { const t=await r.text(); out.innerHTML=`<p>Dispatch failed: HTTP ${r.status}. Check that the workflow file is installed in .github/workflows/, the token has actions:write on this repo, and the ref is main.</p><pre>${esc(t.slice(0,500))}</pre>`; }
+ }catch(e){ out.innerHTML=`<p>Dispatch error: ${esc(e.message)}</p>`; }
+};
+window.clearGhToken=()=>{localStorage.removeItem("atma_gh_token"); render();};
 function updateAiPill(){
  const has=!!localStorage.getItem("atma_groq_key");
  $("#aiPill").textContent=has?"AI: Groq (browser key)":"AI: Offline demo";

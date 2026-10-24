@@ -1,0 +1,31 @@
+# Project ATMA — key probe (serverless backend)
+# INSTALL (manual, once): copy this file to .github/workflows/atma-key-probe.yml
+# GitHub Apps cannot create workflow files directly, so this copy is manual.
+# WHAT IT DOES: on manual dispatch only, runs agent/atma-key-probe.mjs with
+# secrets.PROJECT_ATMA inside the runner, writes docs/backend/key-status.json
+# (verdict only — OK/FAIL/ABSENT, model count on success), then commits it.
+# WHAT IT NEVER DOES: print or commit the key.
+name: ATMA key probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Probe Groq key
+        env:
+          GROQ_API_KEY: ${{ secrets.PROJECT_ATMA }}
+        run: node agent/atma-key-probe.mjs
+      - name: Commit key status if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/backend/key-status.json
+          git diff --cached --quiet || git commit -m "ATMA key probe"
+          git push

@@ -16,6 +16,7 @@ Live (Pages enabled 2026-10-24, verified loading): **https://etienne0101-lab.git
 - **Connect / Mythic client mode** — Save your own Mythic URL, GraphQL path, and operator token locally (browser only) and run Test Connection, which reports the real HTTP/CORS/GraphQL result instead of faking a connection.
 - **Mythic Guide** — How a real Mythic instance starts (`sudo make`, `sudo ./mythic-cli start`), core concepts, task lifecycle, connecting this console to your own server, and this app's security model.
 - **ATMA Assistant (right panel)** — Ask about Mythic operations, task lifecycle, payloads, C2, files, deployment, and troubleshooting. Without a key it answers from a built-in knowledge base. With a Groq key saved in **Connect**, it answers live via Groq from your browser.
+- **Missions + Backend (serverless, OpenForge-style)** — GitHub Actions is the borrowed backend and git is the database: `agent/atma-agent.mjs` runs missions, `atma-scheduler.mjs` ticks daily (owns only `status.json`), `atma-key-probe.mjs` checks the Groq key (verdict only), and `atma-gateway.mjs` is an optional local companion gateway. Workflows live in `github-workflows/` and must be copied once to `.github/workflows/` (GitHub Apps cannot create them). See `agent/README.md`. Limits, stated plainly: workflows take minutes, so this backend is async, not real-time — it cannot do live Mythic callbacks or C2.
 
 ## GitHub Pages
 

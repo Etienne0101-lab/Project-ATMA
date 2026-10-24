@@ -1,0 +1,1 @@
+{"jobs":[{"description":"Update backend status, check briefing freshness","enabled":true,"id":"daily-tick","schedule":"daily 12:00 UTC"},{"description":"Refresh docs/ai-briefing.json via Groq when stale (>7 days)","enabled":true,"id":"briefing-refresh","schedule":"on demand, via groq-briefing workflow"}]}
