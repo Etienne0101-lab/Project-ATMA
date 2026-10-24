@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Project ATMA — Mythic Platform Console</title>
+<link rel="stylesheet" href="styles.css">
+</head><body>
+<header class="top">
+  <div class="logo">PROJECT <span>ATMA</span> · Mythic Platform Console</div>
+  <span class="pill good" id="modePill">DEMO DATA — no real Mythic server connected</span>
+  <span class="pill" id="aiPill">AI: Offline demo</span>
+  <span class="pill" id="briefPill">Briefing: starter</span>
+</header>
+<div class="layout">
+<nav>
+  <button data-view="dashboard" class="active">Dashboard</button>
+  <button data-view="callbacks">Callbacks</button>
+  <button data-view="payloads">Payload Builder</button>
+  <button data-view="c2">C2 Profiles</button>
+  <button data-view="docs">Mythic Guide</button>
+  <h4>Operator</h4>
+  <button data-view="connect">Connect / AI Keys</button>
+  <p class="muted" style="font-size:13px">This Pages app is a front-end console and learning tool. It does not run a Mythic server, does not generate real implants, and never sends your keys to a third party except the provider you choose, from your own browser.</p>
+  <p class="muted" style="font-size:13px">Upstream: <a href="https://github.com/its-a-feature/Mythic" target="_blank" rel="noopener">its-a-feature/Mythic</a> · Docs: <a href="https://docs.mythic-c2.net" target="_blank" rel="noopener">docs.mythic-c2.net</a></p>
+</nav>
+<main id="main"></main>
+<aside>
+  <div style="padding:14px 14px 0"><h2 style="margin:0">ATMA Assistant</h2>
+  <p class="muted" style="font-size:13px;margin:4px 0 0">Ask about Mythic architecture, callbacks, payload types, and C2 profiles. With a Groq key saved locally, it answers live via Groq. Without one, it answers from the built-in demo knowledge base.</p></div>
+  <div class="chat" id="chat"></div>
+  <div class="chatbox"><textarea id="chatInput" placeholder="Ask ATMA… e.g. How do callbacks and tasks work?"></textarea><button class="btn" id="sendBtn">Send</button></div>
+</aside>
+</div>
+<script src="app.js"></script>
+</body></html>

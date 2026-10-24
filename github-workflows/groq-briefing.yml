@@ -1,0 +1,53 @@
+# Project ATMA — Groq briefing refresh
+# HOW TO INSTALL (one manual step): copy this file to
+#   .github/workflows/groq-briefing.yml
+# in the Project-ATMA repo. GitHub Apps cannot create workflow files
+# directly, so this step is done by a repo owner, not by Muse.
+#
+# WHAT IT DOES: on manual dispatch only, it runs in GitHub Actions,
+# reads the repo secret PROJECT_ATMA as the Groq API key *inside the
+# runner*, asks Groq for a short public briefing about the Mythic
+# platform, and commits only docs/ai-briefing.json.
+#
+# WHAT IT NEVER DOES: it never prints the key, never commits the key,
+# and never puts the key into the GitHub Pages bundle. The Pages app
+# loads only the resulting briefing JSON.
+name: Groq briefing refresh
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ask Groq for a short Mythic briefing
+        env:
+          GROQ_API_KEY: ${{ secrets.PROJECT_ATMA }}
+        run: |
+          set -euo pipefail
+          # No 'set -x': the key must never appear in logs.
+          RESPONSE=$(curl -sS https://api.groq.com/openai/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $GROQ_API_KEY" \
+            -d '{"model":"llama-3.3-70b-versatile","temperature":0.3,"max_tokens":500,"messages":[{"role":"system","content":"Write one short paragraph (under 120 words) summarising the Mythic red-team platform for operators: Go/Docker/browser UI, mythic-cli, separately installed agents and C2 profiles. Factual, neutral, no instructions for unauthorised access."},{"role":"user","content":"Write the Mythic platform briefing paragraph."}]}')
+          TEXT=$(printf '%s' "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['choices'][0]['message']['content'])")
+          python3 - "$TEXT" <<'PY'
+          import json, sys, datetime
+          data = {
+              "briefing": sys.argv[1].strip(),
+              "source": "groq-workflow",
+              "updated": datetime.date.today().isoformat(),
+          }
+          with open("docs/ai-briefing.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, indent=2)
+              f.write("\n")
+          PY
+      - name: Commit briefing if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/ai-briefing.json
+          git diff --cached --quiet || git commit -m "Refresh AI briefing via Groq workflow"
+          git push
