@@ -4,8 +4,15 @@
 // It is a tiny OpenAI-compatible proxy: POST /v1/chat/completions and
 // GET /v1/models are forwarded to Groq with the key from YOUR environment.
 // The key never leaves your host except to api.groq.com.
+// Streaming: if the request body has stream:true, the gateway relays the
+// Groq SSE stream straight through to the browser, so the ATMA chat can
+// stream tokens in real time (DeepChat-style), instead of waiting for a
+// full response. Non-streaming requests still return plain JSON.
 // Usage: GROQ_API_KEY=... node agent/atma-gateway.mjs [port]
 // Default port: 8787. Bind: localhost only, by design.
+// To reach it from your phone over Tailscale, expose it with Tailscale
+// Serve on the host (e.g. tailscale serve --bg --https=443 http://127.0.0.1:8787)
+// and point Connect at that Serve HTTPS name — never expose 8787 publicly.
 import { createServer } from "node:http";
 
 const port = Number(process.argv[2] || process.env.ATMA_GATEWAY_PORT || 8787);
@@ -26,11 +33,19 @@ const server = createServer(async (req, res) => {
   if (req.url === "/v1/chat/completions" && req.method === "POST") {
     let body = "";
     for await (const chunk of req) body += chunk;
+    let parsed = {};
+    try { parsed = JSON.parse(body); } catch {}
     const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
       body,
     });
+    if (parsed.stream && r.body) {
+      // SSE passthrough: forward Groq's stream verbatim, no buffering.
+      res.writeHead(r.status, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*" });
+      for await (const chunk of r.body) res.write(chunk);
+      return res.end();
+    }
     return send(r.status, await r.json().catch(() => ({})));
   }
   return send(404, { error: "not found" });

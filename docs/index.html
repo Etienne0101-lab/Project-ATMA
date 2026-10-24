@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Project ATMA — Mythic Platform Console</title>
-<link rel="stylesheet" href="styles.css?v=serverless-3">
+<link rel="stylesheet" href="styles.css?v=serverless-4">
 </head><body>
 <header class="top">
   <div class="logo">PROJECT <span>ATMA</span> · Mythic Platform Console</div>
@@ -31,10 +31,15 @@
 <main id="main"></main>
 <aside>
   <div style="padding:14px 14px 0"><h2 style="margin:0">ATMA Assistant</h2>
-  <p class="muted" style="font-size:13px;margin:4px 0 0">Ask about Mythic architecture, callbacks, payload types, and C2 profiles. With a Groq key saved locally, it answers live via Groq. Without one, it answers from the built-in demo knowledge base.</p></div>
+  <p class="muted" style="font-size:13px;margin:4px 0 0">Real-time streaming chat, DeepChat-style: tokens stream in as they arrive, history is saved in this browser, and you can switch model / backend without leaving the console. With a Groq key saved locally, it answers live via Groq. Via a gateway URL in Connect, it streams through your own host (Tailscale Serve recommended). Without either, it answers from the built-in demo knowledge base.</p>
+  <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+    <select class="field" id="chatModel" style="margin:0;flex:1;min-width:140px"><option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option><option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option></select>
+    <select class="field" id="chatBackend" style="margin:0;flex:1;min-width:120px"><option value="groq">Groq direct</option><option value="gateway">Gateway (host)</option><option value="demo">Demo only</option></select>
+    <button class="btn2" id="newChatBtn" style="margin:0">New chat</button>
+  </div></div>
   <div class="chat" id="chat"></div>
-  <div class="chatbox"><textarea id="chatInput" placeholder="Ask ATMA… e.g. How do callbacks and tasks work?"></textarea><button class="btn" id="sendBtn">Send</button></div>
+  <div class="chatbox"><textarea id="chatInput" placeholder="Ask ATMA… e.g. How do callbacks and tasks work?"></textarea><button class="btn" id="sendBtn">Send</button><button class="btn2" id="stopBtn">Stop</button></div>
 </aside>
 </div>
-<script src="app.js?v=serverless-3"></script>
+<script src="app.js?v=serverless-4"></script>
 </body></html>

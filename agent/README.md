@@ -75,4 +75,4 @@ Demo outputs are labelled DEMO. Real outputs say `source: "groq"`.
 - `atma-agent.mjs` — mission runner
 - `atma-key-probe.mjs` — key health
 - `atma-scheduler.mjs` — scheduler tick (owns only `status.json`)
-- `atma-gateway.mjs` — optional local companion gateway (not serverless)
+- `atma-gateway.mjs` — optional local companion gateway (not serverless). Streams: if the chat request has `stream:true`, Groq's SSE stream is relayed verbatim, so the Pages assistant streams tokens in real time. To connect it to the Pages console over Tailscale: run it on your host (`GROQ_API_KEY=... node agent/atma-gateway.mjs`), expose it with `tailscale serve --bg --https=443 http://127.0.0.1:8787`, then paste that Serve HTTPS URL in the console's Connect tab and set the assistant backend to Gateway (host). Your phone must be on the same Tailscale network to reach the Serve name. Never expose port 8787 publicly, and never put the Groq key in the browser.

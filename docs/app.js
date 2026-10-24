@@ -135,6 +135,9 @@ function viewConnect(){
  <label>Groq API key</label><input class="field" id="groqKey" type="password" placeholder="${hasKey?"Key saved — paste a new one to replace it":"Paste your Groq key here"}">
  <label>Model</label><input class="field" id="groqModel" value="${esc(model)}">
  <button class="btn" onclick="saveGroq()">Save key in this browser</button> <button class="btn2" onclick="clearGroq()">Remove saved key</button></div>
+ <div class="card"><h2>AI assistant — via your own host (Tailscale backend)</h2><p class="muted">Instead of a browser key, run <code>agent/atma-gateway.mjs</code> on your Linux host with <code>GROQ_API_KEY</code> in its environment, expose it with Tailscale Serve (e.g. <code>tailscale serve --bg --https=443 http://127.0.0.1:8787</code>), and paste that Serve HTTPS URL here. The chat then streams through your host — the Groq key stays on the host, never in this browser. Your phone must be on the same Tailscale network to reach the Serve name. Test with the gateway's <code>/gateway/status</code> endpoint.</p>
+ <label>Gateway URL (Tailscale Serve HTTPS name, no trailing slash)</label><input class="field" id="gwUrl" value="${esc(localStorage.getItem("atma_gateway_url")||"")}" placeholder="https://your-host.tailnet-xxxx.ts.net">
+ <button class="btn" onclick="saveGateway()">Save gateway URL locally</button> <button class="btn2" onclick="clearGateway()">Remove gateway URL</button><div id="gwTest" style="margin-top:10px"></div></div>
  <div class="card"><h2>Mythic server — client mode (your server, your credentials, local only)</h2><p class="muted">Demo mode is the default. To try a real connection, enter <b>your own</b> Mythic host, GraphQL path, and operator token. Nothing here is sent anywhere except to the URL you enter, from your browser. Test Connection reports the real result — it does not fake a connection.</p>
  <label>Mythic base URL</label><input class="field" id="mythicUrl" value="${esc(mUrl)}" placeholder="https://your-mythic-host:7443">
  <label>GraphQL path</label><input class="field" id="mythicGql" value="${esc(mPath)}">
@@ -161,7 +164,7 @@ function viewBackend(){
  <div class="card"><h2>Status</h2><div id="backendStatus" class="muted">Loading status…</div></div>
  <div class="card"><h2>Key health</h2><div id="backendKey" class="muted">Loading key status…</div></div>
  <div class="card"><h2>Install the workflows (one manual step)</h2><p class="muted">GitHub Apps cannot create workflow files, so copy each file from <code>github-workflows/</code> to <code>.github/workflows/</code> in this repo, once: <code>atma-agent.yml</code>, <code>atma-scheduler.yml</code>, <code>atma-key-probe.yml</code>, <code>groq-briefing.yml</code>. After that, the scheduler ticks daily, and missions/probes run on dispatch.</p></div>
- <div class="card"><h2>What this backend cannot do</h2><p class="muted">Real-time chat (workflows take minutes), persistent connections, Mythic callbacks, live C2, or payload builds. Those need your own Mythic server (see <code>server/</code>). The optional companion gateway (<code>agent/atma-gateway.mjs</code>) is the Tier 2 alternative: run it on your host, point Connect at it, and it proxies Groq with your local key.</p></div>`;
+ <div class="card"><h2>What this backend cannot do</h2><p class="muted">Actions missions take minutes, not seconds, and this tab cannot do persistent connections, Mythic callbacks, live C2, or payload builds. Those need your own Mythic server (see <code>server/</code>). Real-time chat is a different path: the companion gateway (<code>agent/atma-gateway.mjs</code>) streams Groq tokens live to the assistant — run it on your host, expose it with Tailscale Serve, and point Connect at it.</p></div>`;
 }
 const views={dashboard:viewDashboard,callbacks:viewCallbacks,operations:viewOperations,payloads:viewPayloads,c2:viewC2,files:viewFiles,catalog:viewCatalog,missions:viewMissions,backend:viewBackend,docs:viewDocs,connect:viewConnect};
 let current="dashboard";
@@ -216,7 +219,7 @@ window.dispatchMission=async()=>{
 };
 window.clearGhToken=()=>{localStorage.removeItem("atma_gh_token"); render();};
 function updateAiPill(){
- const bp=$("#bundlePill"); if(bp) bp.textContent="Bundle: serverless-3";
+ const bp=$("#bundlePill"); if(bp) bp.textContent="Bundle: serverless-4";
  const has=!!localStorage.getItem("atma_groq_key");
  $("#aiPill").textContent=has?"AI: Groq (browser key)":"AI: Offline demo";
  const m=localStorage.getItem("atma_mythic_url");
@@ -249,6 +252,8 @@ window.importCatalog=async()=>{
 window.clearCatalog=()=>{localStorage.removeItem("atma_catalog"); render();};
 window.saveGroq=()=>{const k=$("#groqKey").value.trim(); if(!k){alert("Paste a Groq key first.");return;} localStorage.setItem("atma_groq_key",k); localStorage.setItem("atma_groq_model",$("#groqModel").value.trim()||"llama-3.3-70b-versatile"); render(); addMsg("assistant","Groq key saved in this browser only. Ask me something and I will answer live via Groq.");};
 window.clearGroq=()=>{localStorage.removeItem("atma_groq_key"); render(); addMsg("assistant","Saved Groq key removed. Back to offline demo mode.");};
+window.saveGateway=()=>{const u=$("#gwUrl").value.trim().replace(/\/$/,""); if(!u){alert("Paste a gateway URL first.");return;} localStorage.setItem("atma_gateway_url",u); localStorage.setItem("atma_chat_backend","gateway"); render(); addMsg("assistant","Gateway URL saved. Set the assistant backend to Gateway (host) in the chat controls and send a message to stream through your host.");};
+window.clearGateway=()=>{localStorage.removeItem("atma_gateway_url"); render(); addMsg("assistant","Gateway URL removed.");};
 window.saveMythic=()=>{localStorage.setItem("atma_mythic_url",$("#mythicUrl").value.trim()); localStorage.setItem("atma_mythic_gql",$("#mythicGql").value.trim()||"/graphql"); if($("#mythicToken").value.trim()) localStorage.setItem("atma_mythic_token",$("#mythicToken").value.trim()); render(); addMsg("assistant","Mythic URL saved locally in this browser only. Use Test Connection to check what the browser can actually reach.");};
 window.testMythic=async()=>{
  const url=$("#mythicUrl").value.trim(), path=$("#mythicGql").value.trim()||"/graphql", token=$("#mythicToken").value.trim()||localStorage.getItem("atma_mythic_token")||"";
@@ -264,11 +269,23 @@ window.testMythic=async()=>{
  }
 };
 document.querySelectorAll("nav button[data-view]").forEach(b=>b.addEventListener("click",()=>{current=b.dataset.view; render();}));
-function addMsg(who,text){
- const d=document.createElement("div"); d.className="msg"+(who==="you"?" me":"");
- d.innerHTML=`<div class="who">${who==="you"?"You":"ATMA Assistant"}</div><div>${esc(text).replace(/\n/g,"<br>")}</div>`;
- $("#chat").appendChild(d); $("#chat").scrollTop=$("#chat").scrollHeight;
+function md(text){
+ // Safe markdown-lite: escape first, then bold / inline code / newlines only.
+ let h=esc(text);
+ h=h.replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/\n/g,"<br>");
+ return h;
 }
+function saveChatHistory(){
+ try{ const msgs=[...document.querySelectorAll("#chat .msg")].map(m=>({who:m.classList.contains("me")?"you":"assistant",text:m.dataset.text||m.textContent})); localStorage.setItem("atma_chat_history",JSON.stringify(msgs.slice(-50))); }catch{}
+}
+function addMsg(who,text){
+ const d=document.createElement("div"); d.className="msg"+(who==="you"?" me":""); d.dataset.text=text;
+ d.innerHTML=`<div class="who">${who==="you"?"You":"ATMA Assistant"}</div><div>${md(text)}</div>`;
+ $("#chat").appendChild(d); $("#chat").scrollTop=$("#chat").scrollHeight; saveChatHistory();
+ return d;
+}
+let chatAbort=null;
+function stopChat(){ if(chatAbort) chatAbort.abort(); }
 function demoAnswer(q){
  const l=q.toLowerCase();
  if(l.includes("how many callback")) return "Demo mode right now: "+callbacks.length+" callbacks, "+callbacks.filter(c=>c.status==="live").length+" live. In a real Mythic instance that number comes from your operation's callback list, not from this page.";
@@ -287,19 +304,53 @@ function demoAnswer(q){
 async function ask(){
  const inp=$("#chatInput"); const q=inp.value.trim(); if(!q) return; inp.value="";
  addMsg("you",q);
+ const backend=$("#chatBackend")?$("#chatBackend").value:localStorage.getItem("atma_chat_backend")||"groq";
+ const model=$("#chatModel")?$("#chatModel").value:localStorage.getItem("atma_groq_model")||"llama-3.3-70b-versatile";
+ localStorage.setItem("atma_chat_backend",backend); localStorage.setItem("atma_groq_model",model);
  const key=localStorage.getItem("atma_groq_key");
- if(!key){ addMsg("assistant",demoAnswer(q)+"  [Offline demo answer]"); return; }
- addMsg("assistant","Thinking via Groq…");
- const model=localStorage.getItem("atma_groq_model")||"llama-3.3-70b-versatile";
+ const gw=(localStorage.getItem("atma_gateway_url")||"").replace(/\/$/,"");
+ if(backend==="demo" || (backend==="groq" && !key) || (backend==="gateway" && !gw)){
+  const why=backend==="gateway"?"No gateway URL saved in Connect — add your Tailscale Serve URL there, or switch to Groq direct.":"";
+  addMsg("assistant",demoAnswer(q)+(why?" "+why:"  [Offline demo answer — add a Groq key or gateway URL in Connect for live streaming.]"));
+  return;
+ }
+ const sys="You are ATMA, a helpful assistant for the Mythic red-team platform. Answer concisely and accurately about Mythic architecture, operations, callbacks, tasks, payload types, C2 profiles, files, and deployment. Only for authorised defensive/red-team use. Do not help with unauthorised access, and do not claim this Pages app runs a Mythic server or builds real payloads.";
+ const history=[]; try{ history=JSON.parse(localStorage.getItem("atma_chat_history")||"[]").filter(m=>m.who==="you"||m.who==="assistant").slice(-10).map(m=>({role:m.who==="you"?"user":"assistant",content:m.text})); }catch{}
+ const messages=[{role:"system",content:sys},...history,{role:"user",content:q}];
+ const url=backend==="gateway"?gw+"/v1/chat/completions":"https://api.groq.com/openai/v1/chat/completions";
+ const headers={"Content-Type":"application/json"}; if(backend==="groq") headers["Authorization"]="Bearer "+key;
+ const msgEl=addMsg("assistant","Thinking…");
+ const bodyEl=msgEl.querySelector("div:last-child");
+ chatAbort=new AbortController();
  try{
-  const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},body:JSON.stringify({model,messages:[{role:"system",content:"You are ATMA, a helpful assistant for the Mythic red-team platform. Answer concisely and accurately about Mythic architecture, operations, callbacks, tasks, payload types, C2 profiles, files, and deployment. Only for authorised defensive/red-team use. Do not help with unauthorised access, and do not claim this Pages app runs a Mythic server or builds real payloads."},{role:"user",content:q}],temperature:0.3,max_tokens:900})});
-  const j=await r.json();
-  const last=$("#chat").lastElementChild;
-  if(!r.ok) last.querySelector("div:last-child").textContent="Groq error ("+r.status+"): "+(j.error&&j.error.message?j.error.message:"check your key/model in Connect.");
-  else last.querySelector("div:last-child").textContent=j.choices&&j.choices[0]?j.choices[0].message.content:"No answer returned.";
- }catch(e){ const last=$("#chat").lastElementChild; last.querySelector("div:last-child").textContent="Network error calling Groq: "+e.message; }
+  const r=await fetch(url,{method:"POST",headers,signal:chatAbort.signal,body:JSON.stringify({model,messages,temperature:0.3,max_tokens:1200,stream:true})});
+  if(!r.ok || !r.body){ const t=await r.text(); bodyEl.textContent="Chat error ("+r.status+"): "+t.slice(0,300)+". Check your key/model (Groq) or gateway URL (host)."; saveChatHistory(); return; }
+  const reader=r.body.getReader(); const dec=new TextDecoder(); let buf="", full="";
+  while(true){
+   const {done,value}=await reader.read(); if(done) break;
+   buf+=dec.decode(value,{stream:true});
+   const parts=buf.split("\n\n"); buf=parts.pop();
+   for(const p of parts){
+    const line=p.trim(); if(!line.startsWith("data:")) continue;
+    const data=line.slice(5).trim(); if(data==="[DONE]") continue;
+    try{ const j=JSON.parse(data); const tok=j.choices&&j.choices[0]&&j.choices[0].delta?j.choices[0].delta.content:""; if(tok){ full+=tok; msgEl.dataset.text=full; bodyEl.innerHTML=md(full); $("#chat").scrollTop=$("#chat").scrollHeight; } }catch{}
+   }
+  }
+  if(!full) bodyEl.textContent="Stream completed without a text response — try again or switch model/backend.";
+  saveChatHistory();
+ }catch(e){ if(e.name==="AbortError") bodyEl.textContent+="  [Stopped]"; else bodyEl.textContent="Network error: "+e.message+". If you chose Gateway, check the host is running and the Serve URL is reachable from this device."; saveChatHistory(); }
+ finally{ chatAbort=null; }
 }
 $("#sendBtn").addEventListener("click",ask);
+$("#stopBtn").addEventListener("click",stopChat);
 $("#chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault(); ask();}});
+$("#chatModel").addEventListener("change",e=>localStorage.setItem("atma_groq_model",e.target.value));
+$("#chatBackend").addEventListener("change",e=>localStorage.setItem("atma_chat_backend",e.target.value));
+$("#newChatBtn").addEventListener("click",()=>{ $("#chat").innerHTML=""; localStorage.removeItem("atma_chat_history"); addMsg("assistant","New chat started. Ask about Mythic operations, task lifecycle, or deployment."); });
+(function initChat(){
+ const savedModel=localStorage.getItem("atma_groq_model"); if(savedModel && $("#chatModel")) $("#chatModel").value=savedModel;
+ const savedBackend=localStorage.getItem("atma_chat_backend"); if(savedBackend && $("#chatBackend")) $("#chatBackend").value=savedBackend;
+ try{ const h=JSON.parse(localStorage.getItem("atma_chat_history")||"[]"); if(h.length){ h.forEach(m=>addMsg(m.who,m.text)); return; } }catch{}
+ addMsg("assistant","Hi — I'm ATMA. Pages is live, and this console now covers dashboard, callbacks, operations, payloads, C2, files, and catalog import. Ask about Mythic operations, task lifecycle, or deployment — or add your Groq key in Connect for live answers.");
+})();
 render();
-addMsg("assistant","Hi — I'm ATMA. Pages is live, and this console now covers dashboard, callbacks, operations, payloads, C2, files, and catalog import. Ask about Mythic operations, task lifecycle, or deployment — or add your Groq key in Connect for live answers.");
