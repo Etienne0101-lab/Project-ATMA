@@ -166,6 +166,10 @@ function viewBackend(){
 const views={dashboard:viewDashboard,callbacks:viewCallbacks,operations:viewOperations,payloads:viewPayloads,c2:viewC2,files:viewFiles,catalog:viewCatalog,missions:viewMissions,backend:viewBackend,docs:viewDocs,connect:viewConnect};
 let current="dashboard";
 function render(){
+ if(!views[current]){
+  $("#main").innerHTML=`<div class="card"><h2>View not loaded</h2><p class="muted">The "${esc(current)}" view is not in the app bundle this browser loaded — this usually means a cached old app.js. Hard-refresh (Ctrl+Shift+R) to load the newest version.</p></div>`;
+  return;
+ }
  $("#main").innerHTML=views[current]();
  document.querySelectorAll("nav button[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===current));
  if(current==="dashboard") loadBriefing();
