@@ -8,13 +8,17 @@ Type=simple
 User=mythic
 Group=mythic
 # %i is the service directory name under /opt/mythic/InstalledServices/<name>.
-# Each service must provide either main.py (Python, mythic-container) or a
-# compiled main binary, plus rabbitmq_config.json pointing at 127.0.0.1:5672
-# and mythic_server gRPC on 127.0.0.1:17444.
-# Python example — override ExecStart for Go services in an override file:
-#   systemctl edit mythic-agent@poseidon
+# Each service directory must contain:
+#   main       — the agent service executable (Go binary, or a wrapper script
+#                for Python agents that execs python3 main.py)
+#   agent.env  — 0600 env file with RABBITMQ_HOST/USER/PASSWORD/VHOST and
+#                MYTHIC_SERVER_HOST/MYTHIC_SERVER_GRPC_PORT
+# Verified with Poseidon (Go): building main.go and running it with this
+# unit syncs the payload type into mythic_server via RabbitMQ + gRPC,
+# exactly as the Docker container service does.
 WorkingDirectory=/opt/mythic/InstalledServices/%i
-ExecStart=/usr/bin/python3 main.py
+EnvironmentFile=/opt/mythic/InstalledServices/%i/agent.env
+ExecStart=/opt/mythic/InstalledServices/%i/main
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

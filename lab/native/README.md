@@ -135,8 +135,8 @@ cd Project-ATMA/lab/native
 sudo bash atma-native.sh check     # Go, Postgres, RabbitMQ, nginx, node — reports what's missing
 sudo bash atma-native.sh install   # packages + mythic user + directories (no services started yet)
 sudo bash atma-native.sh build     # builds mythic_server from upstream, downloads Hasura, builds React UI
-sudo bash atma-native.sh env       # generates /opt/mythic/.env (0600) — record the admin password it prints once
-sudo bash atma-native.sh start     # postgres → rabbitmq → mythic-server → hasura → nginx
+sudo bash atma-native.sh env       # generates /opt/mythic/bin/.env (0600) — record the admin password it prints once
+sudo bash atma-native.sh start     # postgres → rabbitmq → mythic-server → hasura → nginx, then applies Hasura metadata
 bash atma-native.sh status         # systemd status + port checks + /health
 # UI: https://127.0.0.1:7443  (or via Tailscale Serve — see server/README.md)
 sudo bash atma-native.sh stop
@@ -146,6 +146,96 @@ The installer never opens a firewall port and never binds nginx
 to `0.0.0.0:7443` by default — the shipped nginx config binds
 `127.0.0.1:7443`. Expose it only through Tailscale Serve, or by
 changing that bind deliberately.
+
+## Deployability corrections (2026-10-24, Path A made real)
+
+These were found by reading upstream source, not by guessing, and are
+already in `atma-native.sh` and the units in this folder:
+
+1. **`.env` location is the binary directory.** `mythic_server` reads
+   `.env` from the executable's directory (`utils/config.go`,
+   `getCwdFromExe`), and `database/migrations` relative to its
+   working directory (`database/initialize.go`). So the canonical
+   file is `/opt/mythic/bin/.env`, the unit's `WorkingDirectory` is
+   `/opt/mythic/bin`, and `database/migrations` + `static/` are
+   copied there by `build`. The earlier `/opt/mythic/.env` location
+   would have worked only via systemd's `EnvironmentFile`, and
+   broken on any direct binary run.
+2. **`env` runs after Postgres/RabbitMQ are up.** The old order
+   created accounts before the services started and swallowed the
+   failure with `|| true`. Now `env` starts and waits for both,
+   then verifies a TCP password login to Postgres as `mythic_user`
+   before proceeding.
+3. **Hasura metadata is a separate, required step.** Upstream's
+   Hasura image is `cli-migrations-v2`; the plain `graphql-engine`
+   binary does not auto-apply `/metadata`. `build` now downloads
+   the Hasura CLI, and `start` runs `hasura-metadata` (also
+   runnable standalone) to apply upstream's metadata to the running
+   Hasura. Without it, login works but the React UI's GraphQL
+   queries fail.
+4. **Hasura env construction is in a shell wrapper, not systemd.**
+   `bin/hasura-wrapper.sh` sources `bin/.env` and exports the
+   Postgres URLs itself, because systemd does not reliably expand
+   `${VAR}` from `EnvironmentFile` inside `Environment=` lines.
+5. **Unit health checks are TCP probes, not `rabbitmqctl`.**
+   `rabbitmqctl ping` needs the Erlang cookie and fails as the
+   `mythic` user; a TCP connect to 5432/5672 is enough to gate
+   startup, and the server fails loudly if auth is wrong.
+6. **React build failure is fatal.** The old script echoed a
+   warning and continued with no UI. Now `build` dies if
+   `npm run build` fails or `build/index.html` is missing.
+7. **Go version is enforced.** Apt's Go is usually too old for
+   `go.mod` (go 1.25.1). `install` fetches Go 1.25 from go.dev when
+   the installed Go is missing or < 1.25.
+8. **Hasura server binary is extracted, not downloaded.** Hasura v2
+   GitHub releases contain only the CLI — the old
+   `.../graphql-engine` download URL 404s. `build` now runs
+   `bin/hasura-extract.py`, which pulls the `hasura/graphql-engine`
+   image from Docker Hub (anonymous token, manifest list → arch
+   manifest → layer blobs) and extracts only `usr/bin/graphql-engine`
+   (30 MB, v2.46.0 verified in sandbox). No Docker daemon is used.
+   The binary needs `libpcre.so.3`, so `install` adds `libpcre3`.
+9. **npm must not break the whole install.** Ubuntu's `npm` package
+   conflicts with a nodesource Node 24 install. `install` now
+   installs the core packages without `npm`, then tries `npm`
+   separately only if it is missing.
+10. **`.env` is never shell-sourced.** `default_operation_name=
+    Operation Chimera` is valid for viper/systemd but fatal for
+    shell sourcing (`Chimera: command not found`, which killed
+    Hasura on every restart). `hasura-wrapper.sh`,
+    `hasura-metadata`, and the agent installer now parse
+    `KEY=VALUE` lines literally.
+11. **MITRE data and RabbitMQ management are real requirements.**
+    `build` copies `utils/files/attack.json` to `bin/utils/files/`
+    (otherwise the attack table stays empty), and `install`/`start`
+    enable `rabbitmq_management` — upstream's image is
+    `rabbitmq:3-management-alpine`, and mythic_server polls 15672.
+    A `rabbitmqctl`-created user has no tags, so `env` sets the
+    `management` tag on `mythic_user` (otherwise 401 every 10s).
+    `rabbitmq-plugins` run as root creates `enabled_plugins`
+    root-owned 0600, which breaks the next rabbitmq restart with
+    `eacces` — the scripts chown it to `rabbitmq:rabbitmq` 0644.
+12. **Hasura needs `libodbc2` and `MYTHIC_ACTIONS_URL_BASE`.**
+    The extracted binary fails with `libodbc.so.2: cannot open`
+    without `libodbc2` (now in `install`), and metadata apply
+    fails for every action without `MYTHIC_ACTIONS_URL_BASE`
+    (now exported by the wrapper, matching upstream's Hasura env).
+    Metadata also needs a real CLI project: upstream's
+    `hasura-docker/metadata/` is not one, so `hasura-metadata`
+    builds a temp project (metadata copied in, root `config.yaml`
+    written) and applies that.
+13. **nginx must be reloaded, not just enabled.** `enable --now`
+    is a no-op if nginx is already running, so a config added
+    after first boot was never loaded and 7443 refused connections.
+    `start` now reloads (or restarts) nginx explicitly.
+14. **Agent install copies the whole service directory.**
+    Poseidon reads `poseidon/browserscripts/*.js` and
+    `poseidon/agentfunctions/poseidon.svg` relative to its working
+    directory (Docker `WORKDIR /Mythic/` with the service contents
+    copied in). Copying only the binary syncs the payload type but
+    leaves browserscripts/icon missing. `install-agent-poseidon.sh`
+    copies the full directory, and the agent unit's parent dir
+    must be `mythic`-owned or systemd fails with `200/CHDIR`.
 
 ## What is NOT yet verified (do not skip this)
 
@@ -172,7 +262,20 @@ changing that bind deliberately.
 ## Files
 
 - `atma-native.sh` — installer / builder / starter, with `check`,
-  `install`, `build`, `env`, `start`, `stop`, `status`, `logs`.
+  `install`, `build`, `env`, `hasura-metadata`, `start`, `stop`,
+  `status`, `logs`.
+- `bin/hasura-wrapper.sh` — Hasura launcher that parses `bin/.env`
+  literally (never shell-sources it) and exports the constructed
+  Postgres URLs + `MYTHIC_ACTIONS_URL_BASE`.
+- `bin/hasura-extract.py` — extracts the Hasura server binary from
+  the Docker Hub image, no Docker daemon.
+- `install-agent-poseidon.sh` — builds and installs the Poseidon
+  agent service natively, with a systemd agent unit.
+- `test-real.sh` — endpoint checker for a real stack (health,
+  login, GraphQL, metadata) — for a host without systemd, or as a
+  checklist on a systemd host.
+- `TEST-REPORT-2026-10-24.md` — the real functional test run:
+  9/9 core checks + Poseidon sync, with every failure found and fixed.
 - `systemd/mythic-server.service` — mythic-server unit.
 - `systemd/mythic-hasura.service` — Hasura unit.
 - `systemd/mythic-agent@.service` — template for native

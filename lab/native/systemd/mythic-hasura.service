@@ -7,24 +7,12 @@ Wants=postgresql.service
 Type=simple
 User=mythic
 Group=mythic
-WorkingDirectory=/opt/mythic
-# Passwords/secrets come from /opt/mythic/.env via EnvironmentFile in the
-# installer-generated wrapper; the values below are expanded by systemd
-# from that file. If your systemd version does not expand $VAR in
-# Environment= lines, use a wrapper script that sources .env first.
-EnvironmentFile=/opt/mythic/.env
-Environment=HASURA_GRAPHQL_DATABASE_URL=postgres://mythic_user:${postgres_password}@127.0.0.1:5432/mythic_db
-Environment=HASURA_GRAPHQL_METADATA_DATABASE_URL=postgres://mythic_user:${postgres_password}@127.0.0.1:5432/mythic_db
-Environment=HASURA_GRAPHQL_ENABLE_CONSOLE=true
-Environment=HASURA_GRAPHQL_DEV_MODE=false
-Environment=HASURA_GRAPHQL_ADMIN_SECRET=${hasura_admin_secret}
-Environment=HASURA_GRAPHQL_INSECURE_SKIP_TLS_VERIFY=true
-Environment=HASURA_GRAPHQL_SERVER_PORT=8080
-Environment=HASURA_GRAPHQL_METADATA_DIR=/opt/mythic/src/hasura-docker/metadata
-Environment=HASURA_GRAPHQL_AUTH_HOOK=http://127.0.0.1:17443/graphql/webhook
-Environment=HASURA_GRAPHQL_AUTH_HOOK_MODE=POST
-Environment=HASURA_GRAPHQL_LIVE_QUERIES_MULTIPLEXED_REFETCH_INTERVAL=1000
-ExecStart=/opt/mythic/bin/graphql-engine serve
+WorkingDirectory=/opt/mythic/bin
+# Do NOT put HASURA_GRAPHQL_DATABASE_URL here with ${postgres_password}:
+# systemd does not reliably expand EnvironmentFile variables inside
+# Environment= lines. bin/hasura-wrapper.sh sources bin/.env in shell
+# and exports the constructed URLs itself.
+ExecStart=/opt/mythic/bin/hasura-wrapper.sh
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
