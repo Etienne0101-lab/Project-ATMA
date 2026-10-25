@@ -21,6 +21,18 @@
  *             the route for a phone on Tailscale Serve: Pages (HTTPS)
  *             -> Serve (HTTPS) -> gateway -> Ollama (localhost).
  *   demo    — offline answers, clearly labelled, no model call.
+ *   edge    — NO HOST INSTALL. POST {edgeUrl}/chat/completions,
+ *             OpenAI-compatible SSE, with a Bearer key the user
+ *             pastes in this panel (localStorage only, sent only
+ *             to that endpoint). This is the route for Featherless
+ *             (base https://api.featherless.ai/v1, model
+ *             DeepHat/DeepHat-V1-7B) and any other OpenAI-compatible
+ *             edge/serverless provider. No Ollama binary, no server,
+ *             no gateway, no device of the user's is touched — the
+ *             provider runs the model on its edge/GPU fleet and the
+ *             browser talks to it directly. The same-host module
+ *             (lab/native/) remains in the repo as an option, but
+ *             it is NOT this route and is not required for edge.
  * - Code edits are PROPOSALS ONLY, never automatic admin writes:
  *   DeepHat may output a block ```atma-edit:path/to/file\n<full new
  *   file content>\n```. That block becomes a proposal card with a
@@ -108,25 +120,29 @@
     var gwTok = cfg("atma_gateway_token", "");
     var msgs = history(); msgs.push({ who: "you", text: q }); saveHistory(msgs);
     renderMsgs(msgsEl);
-    if (backend === "demo" || (backend === "ollama" && !ollamaUrl) || (backend === "gateway" && !gw)) {
-      var why = backend === "gateway" ? " No gateway URL saved in Connect — add your Tailscale Serve URL there, or switch to Ollama local." : backend === "ollama" ? " No Ollama URL saved — set it in Connect (default http://localhost:11434) and run Ollama on that host first." : "";
+    var edgeUrl = (cfg("atma_edge_url", "https://api.featherless.ai/v1") || "").replace(/\/$/, "").replace(/\/chat\/completions$/, "");
+    var edgeKey = cfg("atma_edge_key", "");
+    var edgeModel = cfg("atma_edge_model", MODEL);
+    if (backend === "demo" || (backend === "ollama" && !ollamaUrl) || (backend === "gateway" && !gw) || (backend === "edge" && !edgeUrl)) {
+      var why = backend === "gateway" ? " No gateway URL saved in Connect — add your Tailscale Serve URL there, or switch to Ollama local." : backend === "ollama" ? " No Ollama URL saved — set it in Connect (default http://localhost:11434) and run Ollama on that host first." : backend === "edge" ? " No edge endpoint saved — set it in the DeepHat panel (e.g. https://api.featherless.ai/v1) with your provider key. No host install is needed for this route." : "";
       var ans = "DeepHat demo answer: DeepHat/DeepHat-V1-7B runs through Ollama on your own host (see server/deephat-ollama-setup.sh). It is not running inside GitHub Pages. For a live answer, run Ollama with that model pulled, then choose Ollama local or Gateway in this panel." + why;
       msgs.push({ who: "assistant", text: ans }); saveHistory(msgs); renderMsgs(msgsEl); return;
     }
-    var url, headers = { "Content-Type": "application/json" };
-    if (backend === "gateway") { url = gw + "/ollama/api/chat"; if (gwTok) headers["x-atma-token"] = gwTok; }
-    else { url = ollamaUrl + "/api/chat"; }
+    var url, headers = { "Content-Type": "application/json" }, reqBody;
+    if (backend === "edge") { url = edgeUrl + "/chat/completions"; if (edgeKey) headers["Authorization"] = "Bearer " + edgeKey; reqBody = JSON.stringify({ model: edgeModel, messages: chatMsgs, stream: true }); }
+    else if (backend === "gateway") { url = gw + "/ollama/api/chat"; if (gwTok) headers["x-atma-token"] = gwTok; reqBody = JSON.stringify({ model: MODEL, messages: chatMsgs, stream: true }); }
+    else { url = ollamaUrl + "/api/chat"; reqBody = JSON.stringify({ model: MODEL, messages: chatMsgs, stream: true }); }
     var chatMsgs = [{ role: "system", content: SYS }].concat(msgs.slice(-10).map(function (m) { return { role: m.who === "you" ? "user" : "assistant", content: m.text }; }));
     var thinking = document.createElement("div"); thinking.className = "msg"; thinking.innerHTML = "<div class=\"who\">DeepHat</div><div>Thinking…</div>"; msgsEl.appendChild(thinking); msgsEl.scrollTop = msgsEl.scrollHeight;
     try {
-      var r = await fetch(url, { method: "POST", headers: headers, body: JSON.stringify({ model: MODEL, messages: chatMsgs, stream: true }) });
+      var r = await fetch(url, { method: "POST", headers: headers, body: reqBody });
       if (!r.ok || !r.body) { thinking.querySelector("div:last-child").textContent = "DeepHat error (" + r.status + "): " + (await r.text()).slice(0, 300) + ". Check Ollama is running with DeepHat/DeepHat-V1-7B pulled, or the gateway URL/token."; return; }
       var reader = r.body.getReader(), dec = new TextDecoder(), buf = "", full = "";
       while (true) {
         var step = await reader.read(); if (step.done) break;
         buf += dec.decode(step.value, { stream: true });
         var lines = buf.split("\n"); buf = lines.pop();
-        lines.forEach(function (line) { if (!line.trim()) return; try { var j = JSON.parse(line); var tok = j.message && j.message.content ? j.message.content : ""; if (tok) { full += tok; thinking.querySelector("div:last-child").textContent = full; msgsEl.scrollTop = msgsEl.scrollHeight; } } catch (e) {} });
+        lines.forEach(function (line) { var t = line.trim(); if (!t) return; if (t.indexOf("data:") === 0) t = t.slice(5).trim(); if (t === "[DONE]") return; try { var j = JSON.parse(t); var tok = (j.message && j.message.content) ? j.message.content : (j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content) ? j.choices[0].delta.content : (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) ? j.choices[0].message.content : ""; if (tok) { full += tok; thinking.querySelector("div:last-child").textContent = full; msgsEl.scrollTop = msgsEl.scrollHeight; } } catch (e) {} });
       }
       if (!full) { thinking.querySelector("div:last-child").textContent = "Stream completed without text — check the model name and Ollama logs."; return; }
       msgs.push({ who: "assistant", text: full }); saveHistory(msgs); renderMsgs(msgsEl);
@@ -137,9 +153,13 @@
     }
   }
   function panelHTML() {
-    var backend = cfg("atma_deephat_backend", "gateway"), ollamaUrl = cfg("atma_ollama_url", "http://localhost:11434"), gw = cfg("atma_gateway_url", ""), allow = cfg("atma_deephat_allow_edits", "") === "1", repo = cfg("atma_gh_repo", "Etienne0101-lab/Project-ATMA"), hasTok = !!cfg("atma_gh_token", "");
+    var backend = cfg("atma_deephat_backend", "gateway"), ollamaUrl = cfg("atma_ollama_url", "http://localhost:11434"), gw = cfg("atma_gateway_url", ""), edgeUrl = cfg("atma_edge_url", "https://api.featherless.ai/v1"), edgeModel = cfg("atma_edge_model", MODEL), hasEdgeKey = !!cfg("atma_edge_key", ""), allow = cfg("atma_deephat_allow_edits", "") === "1", repo = cfg("atma_gh_repo", "Etienne0101-lab/Project-ATMA"), hasTok = !!cfg("atma_gh_token", "");
     return "<h1>DeepHat AI</h1><p class=\"muted\">DeepHat/DeepHat-V1-7B via Ollama — Kindo's Qwen2.5-Coder-7B finetune for DevSecOps. It runs on <b>your host's Ollama</b>, not inside GitHub Pages. Pull it there first: <code>ollama pull DeepHat/DeepHat-V1-7B</code> (see <code>server/deephat-ollama-setup.sh</code>). This VM cannot run a 7B model, so a live answer here requires your host.</p>" +
-      "<div class=\"card\"><label>Backend</label><select class=\"field\" id=\"dhBackend\"><option value=\"gateway\"" + (backend === "gateway" ? " selected" : "") + ">Gateway (host Ollama via Tailscale)</option><option value=\"ollama\"" + (backend === "ollama" ? " selected" : "") + ">Ollama local</option><option value=\"demo\"" + (backend === "demo" ? " selected" : "") + ">Demo only</option></select>" +
+      "<div class=\"card\"><label>Backend</label><select class=\"field\" id=\"dhBackend\"><option value=\"gateway\"" + (backend === "gateway" ? " selected" : "") + ">Gateway (host Ollama via Tailscale)</option><option value=\"ollama\"" + (backend === "ollama" ? " selected" : "") + ">Ollama local</option><option value=\"edge\"" + (backend === "edge" ? " selected" : "") + ">Edge API (no host install — Featherless / OpenAI-compatible)</option><option value=\"demo\"" + (backend === "demo" ? " selected" : "") + ">Demo only</option></select>" +
+      "<label>Edge endpoint (base URL, no /chat/completions)</label><input class=\"field\" id=\"dhEdge\" value=\"" + esc(edgeUrl) + "\" placeholder=\"https://api.featherless.ai/v1\">" +
+      "<label>Edge API key (browser only, sent only to that endpoint)</label><input class=\"field\" type=\"password\" id=\"dhEdgeKey\" placeholder=\"" + (hasEdgeKey ? "saved in this browser — leave blank to keep it" : "paste provider key here") + "\">" +
+      "<label>Edge model</label><input class=\"field\" id=\"dhEdgeModel\" value=\"" + esc(edgeModel) + "\">" +
+      "<p class=\"muted\">Edge = no install on any device of yours. Create an account with the provider, copy its API key here, and the console talks to the provider's edge/GPU fleet directly. Check the model ID in the provider's catalog before first use — e.g. Featherless lists DeepHat/DeepHat-V1-7B.</p>" +
       "<label>Ollama URL</label><input class=\"field\" id=\"dhOllama\" value=\"" + esc(ollamaUrl) + "\">" +
       "<label>Gateway URL</label><input class=\"field\" id=\"dhGw\" value=\"" + esc(gw) + "\" placeholder=\"https://your-host.tailnet-xxxx.ts.net\">" +
       "<label>Repo for code-edit proposals (owner/repo)</label><input class=\"field\" id=\"dhRepo\" value=\"" + esc(repo) + "\">" +
@@ -152,6 +172,9 @@
     localStorage.setItem("atma_deephat_backend", $("#dhBackend").value);
     localStorage.setItem("atma_ollama_url", $("#dhOllama").value.trim());
     localStorage.setItem("atma_gateway_url", $("#dhGw").value.trim().replace(/\/$/, ""));
+    localStorage.setItem("atma_edge_url", $("#dhEdge").value.trim().replace(/\/$/, ""));
+    localStorage.setItem("atma_edge_model", $("#dhEdgeModel").value.trim() || MODEL);
+    if ($("#dhEdgeKey").value.trim()) localStorage.setItem("atma_edge_key", $("#dhEdgeKey").value.trim());
     localStorage.setItem("atma_gh_repo", $("#dhRepo").value.trim() || "Etienne0101-lab/Project-ATMA");
     localStorage.setItem("atma_deephat_allow_edits", $("#dhAllow").checked ? "1" : "");
     showDeepHat();

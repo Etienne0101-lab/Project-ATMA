@@ -1,0 +1,38 @@
+# Project ATMA — Ollama on Fly.io Machines (edge, no host install)
+# Deploy from a machine with the Fly CLI, or from Fly's web console
+# with these settings. This is a TEMPLATE, not a live deployment.
+#
+# WARNING: Ollama has no auth. A public Fly URL here is an OPEN
+# Ollama. For browser use from the ATMA console, prefer the hosted
+# Edge API route (lab/edge/README.md) — or put an auth proxy in
+# front of this app and point the console at the proxy, never at
+# the raw Ollama URL. Do not deploy this publicly unauthenticated.
+app = "atma-ollama-edge"
+primary_region = "ord"
+
+[build]
+  image = "ollama/ollama"
+
+[mounts]
+  source = "ollama_models"
+  destination = "/root/.ollama"
+  initial_size = "20gb"
+
+[http_service]
+  internal_port = 11434
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  # GPU size is a Fly preset (e.g. a100-40gb, l40s) and varies by
+  # region/availability. For DeepHat 7B a modest GPU is enough;
+  # CPU-only also works, much slower. Pick what Fly offers in
+  # your region at deploy time — do not hard-code a preset that
+  # is not available there.
+  size = "shared-cpu-2x"
+  memory = "8gb"
+
+[env]
+  OLLAMA_HOST = "0.0.0.0:11434"
+  OLLAMA_MODELS = "/root/.ollama"
