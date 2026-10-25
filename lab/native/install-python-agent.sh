@@ -41,6 +41,19 @@ fi
 if [ -f "$INSTALL_DIR/.docker/requirements.txt" ]; then
   "$INSTALL_DIR/venv/bin/pip" install --quiet -r "$INSTALL_DIR/.docker/requirements.txt" || echo "[!] .docker/requirements.txt install had errors — continuing"
 fi
+# Agent-specific imports that are NOT in a requirements file, found by
+# scanning the agent_functions imports (2026-10-24, operator-approved
+# native compose). PyPI 'donut' is the WRONG package (dotfiles tool);
+# the Mythic one is the Donut shellcode C extension, built from source.
+# Apollo: mslex + impacket + toml + donut-shellcode.
+# Athena: donut-shellcode only (pefile/py2app come from requirements.txt).
+if [ "$PT" = "apollo" ]; then
+  "$INSTALL_DIR/venv/bin/pip" install --quiet mslex impacket toml
+  "$INSTALL_DIR/venv/bin/pip" install "git+https://github.com/MEhrn00/donut.git@v2.0.0"
+fi
+if [ "$PT" = "athena" ]; then
+  "$INSTALL_DIR/venv/bin/pip" install "git+https://github.com/MEhrn00/donut.git@v2.0.0"
+fi
 # rabbitmq_config.json — mythic_container reads this file from cwd.
 # Placeholders in the shipped file (mythic_password etc.) are replaced
 # with the real values from bin/.env, exactly as mythic-cli does in Docker.

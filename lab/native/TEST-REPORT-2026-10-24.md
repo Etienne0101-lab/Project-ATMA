@@ -185,3 +185,10 @@ GraphQL-verified, sandbox, 2026-10-24 ~21:12–21:30 EDT:
 - Console Live Mythic tab: docs/app-v5.js (Bundle serverless-5),
   index.html now loads app-v5.js and has a Live Mythic nav button.
 - Paused: apollo, athena — see README §17/§18. Not synced, not claimed.
+
+## Apollo + Athena native compose, same evening
+
+- Services active, payloadtype 8/8 (apollo + athena added).
+- dotnet restore Apollo + Athena: exit 0 both.
+- Athena raw sln build: 1 error (Agent.Crypto reference) — not
+  claimed as a payload build; see README §19.

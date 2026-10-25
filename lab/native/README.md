@@ -368,3 +368,37 @@ query. To use it on a real host: run the gateway on the host,
 expose it with Tailscale Serve, paste the Serve URL + gateway
 token + operator login in the Live tab. Demo mode remains the
 default; nothing in Live mode is faked.
+
+## §19 — Apollo + Athena natively composed (2026-10-24, operator-approved)
+
+After Stephen's "natively compose" approval, the paused .NET agents
+were composed natively:
+- Missing dependencies, found by scanning agent_functions imports
+  (not by guessing): Apollo — mslex, impacket, toml, donut-shellcode;
+  Athena — donut-shellcode only (pefile/py2app already from
+  requirements.txt). PyPI 'donut' is the WRONG package (dotfiles
+  tool, no create()); the correct one is the Donut shellcode C
+  extension (donut-shellcode 2.0.0, compiled from source, no
+  network code in its Python wrapper, original author TheWover).
+- Fix found on first start: newly pip-installed packages landed
+  root-owned 660/770, so the mythic service user could not read
+  the donut .so (Permission denied). Fix is chown -R
+  mythic:mythic on the service dirs; install-python-agent.sh
+  already does this at the end, so a fresh install does not hit it.
+- Verified: both services active, GraphQL payloadtype now 8 —
+  poseidon, medusa, apfell, nemesis, arachne, merlin, apollo,
+  athena. Apollo commands synced (80+, incl. shell, mimikatz,
+  execute_assembly, socks, inject).
+- dotnet restore: Apollo Apollo.sln exit 0, Athena Agent.sln
+  exit 0 (Athena: SSH.NET 2024.2.0 known-vulnerability warnings
+  NU1903, upstream package, noted not fixed here).
+- Honest build limits: Apollo agent_code targets net451 (.NET
+  Framework) — Linux dotnet 8 can restore it but cannot compile
+  that target; a WinExe build needs Windows/Mono. Athena targets
+  net8.0, but a raw `dotnet build Agent.sln` fails with 1 error
+  (AthenaCore missing Agent.Crypto reference) — the Mythic
+  builder builds selected plugins with obfuscation files
+  (agent.obfs/common.obfs), not the whole sln, so a Mythic
+  payload build was NOT claimed from this. Services, commands,
+  and restores are the verified compose; a Windows payload build
+  remains a Windows-host step.
