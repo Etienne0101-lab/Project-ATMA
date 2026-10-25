@@ -113,6 +113,17 @@
       el.insertAdjacentHTML("beforeend", put.ok ? "<p><b>Applied.</b> Commit: " + esc(j.commit && j.commit.sha ? j.commit.sha.slice(0, 10) : "?") + "</p>" : "<p>Apply failed: HTTP " + put.status + " — " + esc(JSON.stringify(j).slice(0, 300)) + "</p>");
     } catch (e) { el.insertAdjacentHTML("beforeend", "<p>Apply error: " + esc(e.message) + "</p>"); }
   };
+  // OpenAI-compatible backends (browser keys only — repo secrets NEVER
+  // reach this file). edge = Featherless (DeepHat itself, the testing
+  // route). nvidia = NVIDIA NIM (Nemotron, NOT DeepHat — a fast
+  // fallback operator model). ollama-cloud = Ollama Cloud
+  // (api.ollama.com/v1, model from its catalog, NOT necessarily DeepHat).
+  function openaiCfg(b) {
+    if (b === "edge") return { base: cfg("atma_edge_url", "https://api.featherless.ai/v1"), key: cfg("atma_edge_key", ""), model: cfg("atma_edge_model", MODEL), label: "Featherless Edge" };
+    if (b === "nvidia") return { base: cfg("atma_nvidia_url", "https://integrate.api.nvidia.com/v1"), key: cfg("atma_nvidia_key", ""), model: cfg("atma_nvidia_model", "nvidia/nemotron-3.5-lightning-30b-a3b"), label: "NVIDIA NIM" };
+    if (b === "ollama-cloud") return { base: cfg("atma_ollama_cloud_url", "https://api.ollama.com/v1"), key: cfg("atma_ollama_cloud_key", ""), model: cfg("atma_ollama_cloud_model", "gpt-oss:20b"), label: "Ollama Cloud" };
+    return null;
+  }
   async function askDeepHat(q, outEl, msgsEl) {
     var backend = cfg("atma_deephat_backend", "gateway");
     var ollamaUrl = (cfg("atma_ollama_url", "http://localhost:11434") || "").replace(/\/$/, "");
@@ -120,16 +131,17 @@
     var gwTok = cfg("atma_gateway_token", "");
     var msgs = history(); msgs.push({ who: "you", text: q }); saveHistory(msgs);
     renderMsgs(msgsEl);
-    var edgeUrl = (cfg("atma_edge_url", "https://api.featherless.ai/v1") || "").replace(/\/$/, "").replace(/\/chat\/completions$/, "");
-    var edgeKey = cfg("atma_edge_key", "");
-    var edgeModel = cfg("atma_edge_model", MODEL);
-    if (backend === "demo" || (backend === "ollama" && !ollamaUrl) || (backend === "gateway" && !gw) || (backend === "edge" && !edgeUrl)) {
-      var why = backend === "gateway" ? " No gateway URL saved in Connect — add your Tailscale Serve URL there, or switch to Ollama local." : backend === "ollama" ? " No Ollama URL saved — set it in Connect (default http://localhost:11434) and run Ollama on that host first." : backend === "edge" ? " No edge endpoint saved — set it in the DeepHat panel (e.g. https://api.featherless.ai/v1) with your provider key. No host install is needed for this route." : "";
+    var oc = openaiCfg(backend);
+    var edgeUrl = oc ? oc.base.replace(/\/$/, "").replace(/\/chat\/completions$/, "") : "";
+    var edgeKey = oc ? oc.key : "";
+    var edgeModel = oc ? oc.model : MODEL;
+    if (backend === "demo" || (backend === "ollama" && !ollamaUrl) || (backend === "gateway" && !gw) || (oc && !edgeUrl)) {
+      var why = backend === "gateway" ? " No gateway URL saved in Connect — add your Tailscale Serve URL there, or switch to Ollama local." : backend === "ollama" ? " No Ollama URL saved — set it in Connect (default http://localhost:11434) and run Ollama on that host first." : oc ? " No " + oc.label + " endpoint/key saved — set it in the DeepHat panel. No host install is needed for this route; the key lives only in this browser." : "";
       var ans = "DeepHat demo answer: DeepHat/DeepHat-V1-7B runs through Ollama on your own host (see server/deephat-ollama-setup.sh). It is not running inside GitHub Pages. For a live answer, run Ollama with that model pulled, then choose Ollama local or Gateway in this panel." + why;
       msgs.push({ who: "assistant", text: ans }); saveHistory(msgs); renderMsgs(msgsEl); return;
     }
     var url, headers = { "Content-Type": "application/json" }, reqBody;
-    if (backend === "edge") { url = edgeUrl + "/chat/completions"; if (edgeKey) headers["Authorization"] = "Bearer " + edgeKey; reqBody = JSON.stringify({ model: edgeModel, messages: chatMsgs, stream: true }); }
+    if (oc) { url = edgeUrl + "/chat/completions"; if (edgeKey) headers["Authorization"] = "Bearer " + edgeKey; reqBody = JSON.stringify({ model: edgeModel, messages: chatMsgs, stream: true }); }
     else if (backend === "gateway") { url = gw + "/ollama/api/chat"; if (gwTok) headers["x-atma-token"] = gwTok; reqBody = JSON.stringify({ model: MODEL, messages: chatMsgs, stream: true }); }
     else { url = ollamaUrl + "/api/chat"; reqBody = JSON.stringify({ model: MODEL, messages: chatMsgs, stream: true }); }
     var chatMsgs = [{ role: "system", content: SYS }].concat(msgs.slice(-10).map(function (m) { return { role: m.who === "you" ? "user" : "assistant", content: m.text }; }));
@@ -155,10 +167,16 @@
   function panelHTML() {
     var backend = cfg("atma_deephat_backend", "gateway"), ollamaUrl = cfg("atma_ollama_url", "http://localhost:11434"), gw = cfg("atma_gateway_url", ""), edgeUrl = cfg("atma_edge_url", "https://api.featherless.ai/v1"), edgeModel = cfg("atma_edge_model", MODEL), hasEdgeKey = !!cfg("atma_edge_key", ""), allow = cfg("atma_deephat_allow_edits", "") === "1", repo = cfg("atma_gh_repo", "Etienne0101-lab/Project-ATMA"), hasTok = !!cfg("atma_gh_token", "");
     return "<h1>DeepHat AI</h1><p class=\"muted\">DeepHat/DeepHat-V1-7B via Ollama — Kindo's Qwen2.5-Coder-7B finetune for DevSecOps. It runs on <b>your host's Ollama</b>, not inside GitHub Pages. Pull it there first: <code>ollama pull DeepHat/DeepHat-V1-7B</code> (see <code>server/deephat-ollama-setup.sh</code>). This VM cannot run a 7B model, so a live answer here requires your host.</p>" +
-      "<div class=\"card\"><label>Backend</label><select class=\"field\" id=\"dhBackend\"><option value=\"gateway\"" + (backend === "gateway" ? " selected" : "") + ">Gateway (host Ollama via Tailscale)</option><option value=\"ollama\"" + (backend === "ollama" ? " selected" : "") + ">Ollama local</option><option value=\"edge\"" + (backend === "edge" ? " selected" : "") + ">Edge API (no host install — Featherless / OpenAI-compatible)</option><option value=\"demo\"" + (backend === "demo" ? " selected" : "") + ">Demo only</option></select>" +
+      "<div class=\"card\"><label>Backend</label><select class=\"field\" id=\"dhBackend\"><option value=\"gateway\"" + (backend === "gateway" ? " selected" : "") + ">Gateway (host Ollama via Tailscale)</option><option value=\"ollama\"" + (backend === "ollama" ? " selected" : "") + ">Ollama local</option><option value=\"edge\"" + (backend === "edge" ? " selected" : "") + ">Featherless Edge — DeepHat (testing, no host)</option><option value=\"nvidia\"" + (backend === "nvidia" ? " selected" : "") + ">NVIDIA NIM — Nemotron (not DeepHat, fast fallback)</option><option value=\"ollama-cloud\"" + (backend === "ollama-cloud" ? " selected" : "") + ">Ollama Cloud — api.ollama.com/v1</option><option value=\"demo\"" + (backend === "demo" ? " selected" : "") + ">Demo only</option></select>" +
       "<label>Edge endpoint (base URL, no /chat/completions)</label><input class=\"field\" id=\"dhEdge\" value=\"" + esc(edgeUrl) + "\" placeholder=\"https://api.featherless.ai/v1\">" +
       "<label>Edge API key (browser only, sent only to that endpoint)</label><input class=\"field\" type=\"password\" id=\"dhEdgeKey\" placeholder=\"" + (hasEdgeKey ? "saved in this browser — leave blank to keep it" : "paste provider key here") + "\">" +
       "<label>Edge model</label><input class=\"field\" id=\"dhEdgeModel\" value=\"" + esc(edgeModel) + "\">" +
+      "<label>NVIDIA NIM API key (browser only)</label><input class=\"field\" type=\"password\" id=\"dhNvidiaKey\" placeholder=\"" + (cfg("atma_nvidia_key", "") ? "saved in this browser — leave blank to keep it" : "paste NVIDIA NIM key here") + "\">" +
+      "<label>NVIDIA model</label><input class=\"field\" id=\"dhNvidiaModel\" value=\"" + esc(cfg("atma_nvidia_model", "nvidia/nemotron-3.5-lightning-30b-a3b")) + "\">" +
+      "<label>Ollama Cloud API key (browser only)</label><input class=\"field\" type=\"password\" id=\"dhOllamaCloudKey\" placeholder=\"" + (cfg("atma_ollama_cloud_key", "") ? "saved in this browser — leave blank to keep it" : "paste Ollama Cloud key here") + "\">" +
+      "<label>Ollama Cloud model (check its catalog)</label><input class=\"field\" id=\"dhOllamaCloudModel\" value=\"" + esc(cfg("atma_ollama_cloud_model", "gpt-oss:20b")) + "\">" +
+      "<button class=\"btn2\" onclick=\"dhUseFeatherless()\">Use Featherless for testing</button> <button class=\"btn2\" onclick=\"dhTestBackend()\">Test selected backend</button><div id=\"dhTestOut\" style=\"margin-top:8px\"></div>" +
+      "<div id=\"dhRepoStatus\" class=\"muted\" style=\"margin-top:8px\">Repo-secret test status: loading…</div>" +
       "<p class=\"muted\">Edge = no install on any device of yours. Create an account with the provider, copy its API key here, and the console talks to the provider's edge/GPU fleet directly. Check the model ID in the provider's catalog before first use — e.g. Featherless lists DeepHat/DeepHat-V1-7B.</p>" +
       "<label>Ollama URL</label><input class=\"field\" id=\"dhOllama\" value=\"" + esc(ollamaUrl) + "\">" +
       "<label>Gateway URL</label><input class=\"field\" id=\"dhGw\" value=\"" + esc(gw) + "\" placeholder=\"https://your-host.tailnet-xxxx.ts.net\">" +
@@ -166,7 +184,10 @@
       "<label><input type=\"checkbox\" id=\"dhAllow\" " + (allow ? "checked" : "") + "> Allow code-edit proposals (review required — nothing applies without your click + confirm)</label>" +
       "<p class=\"muted\">Repo for proposals: <code>" + esc(repo) + "</code> · GitHub token: <b>" + (hasTok ? "saved in this browser" : "not saved — set it in Connect") + "</b> · Apply is whole-file only, allowlisted to docs/, agent/, lab/, server/. If you meant a different repo than Project-ATMA, change it in Connect.</p>" +
       "<button class=\"btn\" onclick=\"dhSave()\">Save DeepHat settings</button></div>" +
-      "<div class=\"card\"><div class=\"chat\" id=\"dhChat\" style=\"min-height:200px\"></div><div class=\"chatbox\"><textarea id=\"dhInput\" placeholder=\"Ask DeepHat… e.g. Explain how the http C2 profile works\"></textarea><button class=\"btn\" id=\"dhSend\">Send</button></div><div id=\"dhProps\" style=\"margin-top:12px\"></div></div>";
+      "<div class=\"card\"><div class=\"chat\" id=\"dhChat\" style=\"min-height:200px\"></div><div class=\"chatbox\"><textarea id=\"dhInput\" placeholder=\"Ask DeepHat… e.g. Explain how the http C2 profile works\"></textarea><button class=\"btn\" id=\"dhSend\">Send</button></div><div id=\"dhProps\" style=\"margin-top:12px\"></div></div>" +
+      "<div class=\"card\"><h2>Mythic operator — chat commands (same app, no new install)</h2><p class=\"muted\">This does NOT let the model run Mythic. You type a slash command, you confirm task creation, and the UI runs it through your gateway with your operator JWT (browser only, from the Live Mythic tab login). If you are not logged in there, these commands tell you to log in first.</p>" +
+      "<p><code>/mythic list</code> — payload types, C2 profiles, callbacks, tasks &nbsp;·&nbsp; <code>/mythic task &lt;callback_id&gt; &lt;command&gt; [params JSON]</code> — create one task (confirm first)</p>" +
+      "<div style=\"display:flex;gap:8px\"><input class=\"field\" id=\"dhMythicCmd\" placeholder=\"/mythic list\" style=\"margin:0\"><button class=\"btn\" onclick=\"dhMythicCmd()\">Run</button></div><div id=\"dhMythicOut\" style=\"margin-top:10px\"></div></div>";
   }
   window.dhSave = function () {
     localStorage.setItem("atma_deephat_backend", $("#dhBackend").value);
@@ -175,9 +196,61 @@
     localStorage.setItem("atma_edge_url", $("#dhEdge").value.trim().replace(/\/$/, ""));
     localStorage.setItem("atma_edge_model", $("#dhEdgeModel").value.trim() || MODEL);
     if ($("#dhEdgeKey").value.trim()) localStorage.setItem("atma_edge_key", $("#dhEdgeKey").value.trim());
+    if ($("#dhNvidiaKey").value.trim()) localStorage.setItem("atma_nvidia_key", $("#dhNvidiaKey").value.trim());
+    localStorage.setItem("atma_nvidia_model", $("#dhNvidiaModel").value.trim() || "nvidia/nemotron-3.5-lightning-30b-a3b");
+    if ($("#dhOllamaCloudKey").value.trim()) localStorage.setItem("atma_ollama_cloud_key", $("#dhOllamaCloudKey").value.trim());
+    localStorage.setItem("atma_ollama_cloud_model", $("#dhOllamaCloudModel").value.trim() || "gpt-oss:20b");
     localStorage.setItem("atma_gh_repo", $("#dhRepo").value.trim() || "Etienne0101-lab/Project-ATMA");
     localStorage.setItem("atma_deephat_allow_edits", $("#dhAllow").checked ? "1" : "");
     showDeepHat();
+  };
+
+  window.dhUseFeatherless = function () {
+    localStorage.setItem("atma_deephat_backend", "edge");
+    localStorage.setItem("atma_edge_url", "https://api.featherless.ai/v1");
+    localStorage.setItem("atma_edge_model", MODEL);
+    showDeepHat();
+    var o = $("#dhTestOut"); if (o) o.innerHTML = "<p>Featherless selected for testing. Paste your Featherless key above, Save, then Test.</p>";
+  };
+  window.dhTestBackend = async function () {
+    var out = $("#dhTestOut"); if (!out) return;
+    var b = cfg("atma_deephat_backend", "edge"); var c = openaiCfg(b);
+    if (!c) { out.innerHTML = "<p>Test is for Edge / NVIDIA / Ollama Cloud backends. Choose one, Save, then Test.</p>"; return; }
+    if (!c.key) { out.innerHTML = "<p>No " + esc(c.label) + " key saved in this browser yet.</p>"; return; }
+    var t0 = Date.now();
+    try {
+      var r = await fetch(c.base.replace(/\/$/, "") + "/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + c.key }, body: JSON.stringify({ model: c.model, messages: [{ role: "user", content: "Reply with exactly: edge ok" }], stream: false, max_tokens: 20 }) });
+      var j = await r.json();
+      var txt = j.choices && j.choices[0] && j.choices[0].message ? j.choices[0].message.content : JSON.stringify(j).slice(0, 300);
+      out.innerHTML = r.ok ? "<p><b>" + esc(c.label) + " OK</b> in " + (Date.now() - t0) + " ms — " + esc(txt) + "</p>" : "<p><b>" + esc(c.label) + " failed</b> HTTP " + r.status + " — " + esc(txt) + "</p>";
+    } catch (e) { out.innerHTML = "<p>Test error: " + esc(e.message) + "</p>"; }
+  };
+  window.dhMythicCmd = async function () {
+    var out = $("#dhMythicOut"); var raw = ($("#dhMythicCmd").value || "").trim(); if (!out) return;
+    var gw = (cfg("atma_gateway_url", "") || "").replace(/\/$/, ""), gwTok = cfg("atma_gateway_token", ""), jwt = cfg("atma_mythic_jwt", "");
+    if (!gw || !gwTok || !jwt) { out.innerHTML = "<p>Log in first on the Live Mythic tab (gateway URL + token, then operator login). That login puts your JWT in this browser only — DeepHat never sees it.</p>"; return; }
+    var gql = async function (query) {
+      var r = await fetch(gw + "/mythic/graphql", { method: "POST", headers: { "Content-Type": "application/json", "x-atma-token": gwTok, "Authorization": "Bearer " + jwt }, body: JSON.stringify({ query: query }) });
+      return r.json();
+    };
+    try {
+      if (raw === "/mythic list" || raw === "/mythic callbacks") {
+        var j = await gql("{ payloadtype { name } c2profile { name } callback { id display_id host user } task { id display_id command } }");
+        if (j.errors) { out.innerHTML = "<p>GraphQL error: " + esc(JSON.stringify(j.errors).slice(0, 500)) + "</p>"; return; }
+        var d = j.data || {};
+        out.innerHTML = "<p><b>Payload types:</b> " + esc((d.payloadtype || []).map(function (x) { return x.name; }).join(", ")) + "</p><p><b>C2:</b> " + esc((d.c2profile || []).map(function (x) { return x.name; }).join(", ")) + "</p><p><b>Callbacks:</b> " + esc(JSON.stringify(d.callback || [])) + "</p><p><b>Tasks:</b> " + esc(JSON.stringify((d.task || []).slice(-10))) + "</p>";
+        return;
+      }
+      var m = raw.match(/^\/mythic task\s+(\d+)\s+(\S+)(?:\s+(.+))?$/);
+      if (m) {
+        var cid = m[1], cmd = m[2], params = m[3] || "{}";
+        if (!confirm("Create Mythic task on callback " + cid + ": " + cmd + " " + params + " ? This runs on your own Mythic server, for systems you own or are authorised to test.")) return;
+        var tj = await gql('mutation { createTask(callback_id: ' + cid + ', command: "' + cmd.replace(/"/g, "") + '", params: "' + params.replace(/"/g, '\\"') + '") { id display_id status } }');
+        out.innerHTML = tj.errors ? "<p>Task error (server shape may differ — see text): " + esc(JSON.stringify(tj.errors).slice(0, 500)) + "</p>" : "<p><b>Task created:</b> " + esc(JSON.stringify(tj.data)) + "</p>";
+        return;
+      }
+      out.innerHTML = "<p>Unknown command. Use <code>/mythic list</code> or <code>/mythic task &lt;callback_id&gt; &lt;command&gt; [params JSON]</code>.</p>";
+    } catch (e) { out.innerHTML = "<p>Mythic command error: " + esc(e.message) + " — is the gateway still up and the JWT still valid?</p>"; }
   };
   window.showDeepHat = function () {
     var main = $("#main"); if (!main) return;
@@ -186,6 +259,11 @@
     var msgsEl = $("#dhChat"); renderMsgs(msgsEl);
     $("#dhSend").addEventListener("click", function () { var v = $("#dhInput").value.trim(); if (!v) return; $("#dhInput").value = ""; askDeepHat(v, $("#dhProps"), msgsEl); });
     $("#dhInput").addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#dhSend").click(); } });
+    fetch("backend/edge-status.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      var el = $("#dhRepoStatus"); if (!el) return;
+      if (!j) { el.innerHTML = "Repo-secret test status: none published yet. Copy <code>github-workflows/atma-edge-test.yml</code> to <code>.github/workflows/</code> and dispatch it — it tests the repo secrets inside the runner and publishes only OK/FAIL here, never a key."; return; }
+      el.innerHTML = "Repo-secret test (" + esc(j.generated_at || "?") + "): " + (j.providers || []).map(function (p) { return esc(p.name) + " " + (p.ok ? "OK" : "FAIL") + (p.model ? " " + esc(p.model) : "") + (p.error ? " (" + esc(p.error) + ")" : ""); }).join(" · ") + " — keys are never in this file.";
+    }).catch(function () {});
   };
   // Nav button + floating bubble, added after the main app loads.
   document.addEventListener("DOMContentLoaded", function () {

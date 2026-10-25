@@ -1,0 +1,58 @@
+# Project ATMA — Live Edge test (repo secrets, in-runner only)
+#
+# WHAT THIS DOES: on workflow_dispatch, a GitHub Actions runner calls
+# NVIDIA NIM and Ollama Cloud ONCE each with a tiny prompt, using the
+# repo secrets as environment variables, and writes the result to
+# docs/backend/edge-status.json, which the Pages console displays.
+#
+# WHAT IT NEVER DOES: repo secrets are NEVER put in the browser
+# bundle, NEVER printed to logs (the script reports only ok/fail,
+# model, latency, and a short error class), and NEVER sent anywhere
+# except the provider's own API endpoint. The status file is public
+# by design — it contains no key material at all.
+#
+# WHY THIS EXISTS: Pages is static. There is no server to hide a
+# key in, so a repo secret cannot power live browser chat directly.
+# This workflow is the secure bridge: it PROVES the repo secrets
+# work (or reports exactly which one fails/absent) and publishes
+# that proof. Live browser chat uses keys the user pastes in the
+# DeepHat panel (localStorage only) — see docs/deephat.js.
+#
+# SETUP (Stephen, manual — GitHub Apps get 403 writing workflows):
+#   1. Copy this file to .github/workflows/atma-edge-test.yml
+#   2. Actions tab → "ATMA Live Edge test" → Run workflow
+#   3. Check docs/backend/edge-status.json on Pages, and the
+#      DeepHat panel's "Repo-secret test" line.
+# Secret names the script tries (it reports which name it used):
+#   NVIDIA: NVIDIA_NIM_API_KEY, else NVIDIABUILD (existing)
+#   Ollama: OLLAMA_API_KEY, else OLLAMA_CLOUD_API_KEY
+#   Featherless: FEATHERLESS_API_KEY — normally ABSENT on purpose;
+#     Featherless testing is via the browser panel key, not a secret.
+name: ATMA Live Edge test
+on:
+  workflow_dispatch:
+jobs:
+  edge-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Test edge providers (keys in env only, never logged)
+        env:
+          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+          NVIDIABUILD: ${{ secrets.NVIDIABUILD }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          OLLAMA_CLOUD_API_KEY: ${{ secrets.OLLAMA_CLOUD_API_KEY }}
+          FEATHERLESS_API_KEY: ${{ secrets.FEATHERLESS_API_KEY }}
+        run: node agent/edge-test.mjs docs/backend/edge-status.json
+      - name: Publish status (status file only, no keys)
+        run: |
+          git config user.name "atma-edge-test"
+          git config user.email "atma-edge-test@users.noreply.github.com"
+          git add docs/backend/edge-status.json
+          git diff --cached --quiet || git commit -m "ATMA: edge test status"
+          git push
