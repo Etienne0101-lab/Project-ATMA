@@ -308,3 +308,63 @@ already in `atma-native.sh` and the units in this folder:
 - `systemd-manager-design.md` — Path B design: the CLIManager
   methods a systemd manager must implement, and what to map each
   one to.
+
+## §17 — All other agents + C2 profiles, native (2026-10-24 evening)
+
+This is the full infrastructure, not a definition sync: each entry below
+is a service that runs in the stack, with its agent_code / c2_code,
+its builder, and its dependencies — verified by GraphQL
+`{ payloadtype { name } c2profile { name } }` against the live sandbox.
+
+**Payload types live (6):** poseidon (Go, pre-existing), medusa
+(Python, install-python-agent.sh), apfell (Python service, same
+installer — payloads run on macOS only, service/build side is Linux),
+nemesis (Python, same installer), arachne (Python, same installer —
+also brought the webshell C2), merlin (Go, install-agent-merlin.sh —
+working dir is container/, builder hard-codes /Mythic/agent, so
+/Mythic is a directory of per-agent symlinks, not a single symlink;
+Go build temp/cache are under /opt/mythic/go, NOT /tmp, because
+/tmp is a 512 MB tmpfs in the sandbox and a Merlin build overflows it).
+
+**C2 profiles live (8):** http (pre-existing), webshell (via arachne),
+websocket, tcp, dynamichttp, smb (Python, install-python-c2.sh),
+httpx, dns (Go, install-go-c2.sh).
+
+**Paused, awaiting the operator's plain-words decision (§18):**
+apollo and athena. Their service source + agent_code are installed
+(/opt/mythic/InstalledServices/apollo, .../athena, units
+mythic-python-agent@apollo / @athena, currently stopped), and dotnet
+SDK 8.0 is installed on the host — but both services fail at import
+with `ModuleNotFoundError: No module named 'donut'` in their
+agent_functions. The upstream file that named that dependency did
+not pass a safety check, so Muse did NOT install it on its own.
+Until Stephen says, in plain words, to proceed with that dependency,
+apollo/athena stay paused and are NOT claimed as synced. This is a
+deliberate stop, not a bug to work around silently.
+
+**Not built on Linux, honestly:** apfell payloads need macOS
+(Swift/JXA); Apollo/Athena payloads are Windows .NET (service side
+is Linux, payload runs on Windows); the remaining MythicAgents
+repos are exercises, wrappers, translators, or niche agents
+(hercules exercises, forge, ghostwriter, etc.) — not production
+payload types, and not installed. The "all other agents" in this
+run means the production payload types above, plus the C2 set.
+
+## §18 — Web app <-> real backend link
+
+`agent/atma-gateway.mjs` now has a second job besides Groq:
+POST /mythic/auth and POST /mythic/graphql, forwarded to
+MYTHIC_URL (default https://127.0.0.1:7443). Gateway auth is
+x-atma-token (ATMA_GATEWAY_TOKEN on the host); the browser's
+Mythic operator JWT travels in Authorization and is forwarded,
+never stored by the gateway. MYTHIC_INSECURE_TLS=1 is lab-only
+(self-signed nginx cert). The Pages console's new "Live Mythic"
+tab (docs/app-v5.js, Bundle serverless-5) logs in via the
+gateway and refreshes payloadtype / c2profile / callback / task
+from the real server. Verified in the sandbox: wrong gateway token
+→ 401, auth → JWT (241 chars), GraphQL via gateway → the same
+6 payload types + 8 C2 profiles + 2 lab callbacks as a direct
+query. To use it on a real host: run the gateway on the host,
+expose it with Tailscale Serve, paste the Serve URL + gateway
+token + operator login in the Live tab. Demo mode remains the
+default; nothing in Live mode is faked.

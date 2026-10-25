@@ -1,0 +1,20 @@
+[Unit]
+Description=Mythic native Merlin agent service (no Docker)
+After=network.target mythic-server.service rabbitmq-server.service
+Wants=rabbitmq-server.service
+
+[Service]
+Type=simple
+User=mythic
+Group=mythic
+WorkingDirectory=/opt/mythic/InstalledServices/merlin/container
+ExecStart=/opt/mythic/InstalledServices/merlin/container/main
+EnvironmentFile=/opt/mythic/InstalledServices/merlin/container/agent.env
+Restart=on-failure
+RestartSec=5
+ProtectSystem=strict
+ReadWritePaths=/opt/mythic /var/lib/mythic /build /Mythic
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

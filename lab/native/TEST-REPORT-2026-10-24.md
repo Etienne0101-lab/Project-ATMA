@@ -170,3 +170,18 @@ already listening on 127.0.0.1:18080):
 - **mythic-cli Path B:** `mythic-cli start/stop/install` still
   does not manage the native stack. Path A units are the manager
   for now; Path B (`systemd-manager-design.md`) remains design only.
+
+## All-agents + C2 expansion, same day (evening)
+
+GraphQL-verified, sandbox, 2026-10-24 ~21:12–21:30 EDT:
+- payloadtype: poseidon, medusa, apfell, nemesis, arachne, merlin (6)
+- c2profile: http, webshell, websocket, tcp, dynamichttp, smb, httpx, dns (8)
+- Installers: install-python-agent.sh (medusa, apfell, nemesis, arachne),
+  install-agent-merlin.sh + systemd/mythic-merlin.service (merlin),
+  install-python-c2.sh (websocket, tcp, dynamichttp, smb),
+  install-go-c2.sh (httpx, dns).
+- Gateway Mythic proxy verified: /gateway/status ok, wrong token 401,
+  /mythic/auth → JWT 241 chars, /mythic/graphql → 6 + 8 + 2 callbacks.
+- Console Live Mythic tab: docs/app-v5.js (Bundle serverless-5),
+  index.html now loads app-v5.js and has a Live Mythic nav button.
+- Paused: apollo, athena — see README §17/§18. Not synced, not claimed.

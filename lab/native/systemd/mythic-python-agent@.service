@@ -1,0 +1,22 @@
+[Unit]
+Description=Mythic native Python agent service %i (no Docker)
+After=network.target mythic-server.service rabbitmq-server.service
+Wants=rabbitmq-server.service
+
+[Service]
+Type=simple
+User=mythic
+Group=mythic
+WorkingDirectory=/opt/mythic/InstalledServices/%i
+ExecStart=/opt/mythic/InstalledServices/%i/venv/bin/python main.py
+EnvironmentFile=-/opt/mythic/InstalledServices/%i/agent.env
+Restart=on-failure
+RestartSec=5
+# Python agents read rabbitmq_config.json from cwd; builders use
+# relative agent_code paths, so WorkingDirectory must be the service dir.
+ProtectSystem=strict
+ReadWritePaths=/opt/mythic /var/lib/mythic /build
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
