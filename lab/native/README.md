@@ -459,3 +459,27 @@ Rebuild fixes now in the installers (not manual-only):
   admin + service passwords) and any proxy credential — those
   stay on the host only. The repo holds everything needed to
   regenerate the stack, not the secrets that run it.
+
+## §22 — DeepHat AI chat (Ollama, 2026-10-24)
+
+DeepHat/DeepHat-V1-7B (Kindo, Qwen2.5-Coder-7B finetune) is wired
+into the Pages console as docs/deephat.js (bundle serverless-6):
+a DeepHat AI main-pane view + a floating chat bubble bottom-right,
+sharing one localStorage history. Backends: Ollama local
+(http://localhost:11434) or gateway (agent/atma-gateway.mjs now
+proxies /ollama/* to OLLAMA_URL with the same x-atma-token gate;
+stub-verified: wrong token 401, correct token returns the Ollama
+reply). Python client: agent/deephat_ollama.py (the operator's
+ollama chat snippet, plus --check/--stream/--interactive).
+Host setup: server/deephat-ollama-setup.sh (install Ollama, pull
+the model, verify). This VM cannot run a 7B model, so a live
+DeepHat answer requires a host Ollama — Pages never runs the model.
+Code edits are proposals only: a ```atma-edit:path block becomes
+a review card (preview + download + Apply). Apply needs the
+proposal toggle on, a GitHub token saved in Connect (localStorage
+only, sent only to api.github.com), and a confirm click; it is
+whole-file only, allowlisted to docs/, agent/, lab/, server/,
+default repo Etienne0101-lab/Project-ATMA (changeable in the
+panel — "maripo" was taken to mean this root project; correct the
+repo field if a different repo was meant). No unconditional admin
+write is granted to any model.

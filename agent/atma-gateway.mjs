@@ -37,6 +37,14 @@ const port = Number(process.argv[2] || process.env.ATMA_GATEWAY_PORT || 8787);
 const groqKey = process.env.GROQ_API_KEY || "";
 const gatewayToken = process.env.ATMA_GATEWAY_TOKEN || "";
 const mythicUrl = (process.env.MYTHIC_URL || "https://127.0.0.1:7443").replace(/\/$/, "");
+// DeepHat / Ollama proxy (NEW): POST /ollama/* forwards to the host's
+// Ollama (default http://127.0.0.1:11434, override with OLLAMA_URL).
+// Same gateway-token rule as Mythic: x-atma-token required, never
+// stored. The Pages DeepHat chat uses this route over Tailscale Serve
+// so a phone can reach a host Ollama without exposing Ollama itself.
+// Ollama itself has no auth on localhost by default — the gateway
+// token is the only gate, and the gateway binds localhost only.
+const ollamaUrl = (process.env.OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/$/, "");
 // Lab-only: Mythic's nginx uses a self-signed cert, so Node must be told
 // to accept it. This is the standard Node flag, set by the gateway itself
 // only when the host explicitly opted in with MYTHIC_INSECURE_TLS=1.
@@ -49,7 +57,27 @@ const server = createServer(async (req, res) => {
     res.end(JSON.stringify(obj));
   };
   if (req.method === "OPTIONS") { res.writeHead(204, { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type,authorization,x-atma-token" }); return res.end(); }
-  if (req.url === "/gateway/status" || req.url === "/status") return send(200, { backend: "atma-gateway", provider: groqKey ? "groq" : "mythic-only", mythic_url: mythicUrl, mythic_proxy: true, ok: true });
+  if (req.url === "/gateway/status" || req.url === "/status") return send(200, { backend: "atma-gateway", provider: groqKey ? "groq" : "mythic-only", mythic_url: mythicUrl, mythic_proxy: true, ollama_url: ollamaUrl, ollama_proxy: true, ok: true });
+  // ---- Ollama proxy (DeepHat chat): /ollama/api/chat, /ollama/api/tags, etc. ----
+  if (req.url.startsWith("/ollama/")) {
+    if (!gatewayToken) return send(500, { error: "gateway has no ATMA_GATEWAY_TOKEN set — Ollama proxy disabled until the host sets one" });
+    if ((req.headers["x-atma-token"] || "") !== gatewayToken) return send(401, { error: "invalid or missing gateway token (send it as x-atma-token)" });
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    const target = ollamaUrl + req.url.slice("/ollama".length);
+    try {
+      const r = await fetch(target, { method: req.method, headers: { "Content-Type": "application/json" }, body: body || undefined });
+      // Stream NDJSON / SSE through unchanged; non-streaming JSON too.
+      if (r.body) {
+        res.writeHead(r.status, { "Content-Type": r.headers.get("content-type") || "application/json", "Access-Control-Allow-Origin": "*" });
+        for await (const chunk of r.body) res.write(chunk);
+        return res.end();
+      }
+      return send(r.status, await r.json().catch(() => ({})));
+    } catch (e) {
+      return send(502, { error: "could not reach Ollama at " + ollamaUrl + ": " + e.message + " — is Ollama running and is DeepHat/DeepHat-V1-7B pulled?" });
+    }
+  }
   // ---- Mythic proxy (gateway-token protected, operator token forwarded, never stored) ----
   if (req.url === "/mythic/graphql" || req.url === "/mythic/auth") {
     if (!gatewayToken) return send(500, { error: "gateway has no ATMA_GATEWAY_TOKEN set — Mythic proxy disabled until the host sets one" });
@@ -98,4 +126,4 @@ const server = createServer(async (req, res) => {
   }
   return send(404, { error: "not found" });
 });
-server.listen(port, "127.0.0.1", () => console.log(`atma-gateway: listening on http://127.0.0.1:${port} (localhost only) mythic=${mythicUrl} groq=${groqKey ? "yes" : "no"}`));
+server.listen(port, "127.0.0.1", () => console.log(`atma-gateway: listening on http://127.0.0.1:${port} (localhost only) mythic=${mythicUrl} ollama=${ollamaUrl} groq=${groqKey ? "yes" : "no"}`));
