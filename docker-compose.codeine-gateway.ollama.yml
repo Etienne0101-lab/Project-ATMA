@@ -1,0 +1,154 @@
+# Project ATMA  Codeine Gateway with Ollama
+#
+# This compose file adds Ollama service to the Codeine Gateway stack.
+# Use with: docker compose -f docker-compose.codeine-gateway.yml -f docker-compose.codeine-gateway.ollama.yml up -d
+#
+# Architecture:
+#   ┌─────────────────────────────────────────────────────────────┐
+#   │                    Codeine Gateway + Ollama                     │
+#   │  ┌─────────────────┐  ┌─────────────────┐                  │
+#   │  │   Codeine        │  │   Ollama         │                  │
+#   │  │   Gateway        │  │   (LLM Inference)│                  │
+#   │  │   (Port 8787)    │  │   (Port 11434)   │                  │
+#   │  └────────┬────────┘  └────────┬────────┘                  │
+#   │           │                  │                           │
+#   │           └──────────────────┴──────────────────┘           │
+#   │                    Shared Network                              │
+#   └─────────────────────────────────────────────────────────────┘
+#
+# Requirements:
+#   - GPU support for Ollama (recommended for 7B+ models)
+#   - At least 8GB RAM for 7B models
+#   - At least 6GB disk space for model weights
+#
+# Usage:
+#   # Start all services
+#   docker compose -f docker-compose.codeine-gateway.yml \
+#     -f docker-compose.codeine-gateway.ollama.yml up -d
+#
+#   # Pull a model
+#   docker compose -f docker-compose.codeine-gateway.yml \
+#     -f docker-compose.codeine-gateway.ollama.yml exec ollama \
+#     ollama pull codeine-7b
+#
+#   # Or pull DeepHat
+#   docker compose -f docker-compose.codeine-gateway.yml \
+#     -f docker-compose.codeine-gateway.ollama.yml exec ollama \
+#     ollama pull DeepHat/DeepHat-V1-7B
+#
+# Environment Variables:
+#   OLLAMA_MODELS: Comma-separated list of models to pull on startup
+#   OLLAMA_HOST: Host for Ollama server (default: 0.0.0.0)
+#   OLLAMA_PORT: Port for Ollama server (default: 11434)
+#
+
+version: '3.8'
+
+services:
+  # =========================================================================
+  # Ollama Service
+  # =========================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    
+    # GPU support
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    # Environment variables
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_PORT=11434
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_ORIGINS=*
+    
+    # Ports
+    ports:
+      - "11434:11434"
+    
+    # Volumes for model storage
+    volumes:
+      - ollama-data:/root/.ollama
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 8G
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    
+    # Network configuration
+    networks:
+      - codeine-network
+
+  # =========================================================================
+  # Ollama Model Puller (one-time setup)
+  # =========================================================================
+  ollama-setup:
+    image: ollama/ollama:latest
+    container_name: ollama-setup
+    restart: "no"
+    
+    environment:
+      - OLLAMA_HOST=ollama
+      - OLLAMA_PORT=11434
+    
+    volumes:
+      - ollama-data:/root/.ollama
+    
+    networks:
+      - codeine-network
+    
+    # Pull models on startup
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for Ollama to start..."
+        sleep 10
+        echo "Pulling Codeine model..."
+        ollama pull codeine-7b || ollama pull DeepHat/DeepHat-V1-7B
+        echo "Models pulled successfully!"
+        # Keep container running briefly to see logs
+        sleep 5
+    
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+# =========================================================================
+# Volumes
+# =========================================================================
+volumes:
+  ollama-data:
+    driver: local
+    name: codeine-ollama-data
+
+# =========================================================================
+# Networks
+# =========================================================================
+networks:
+  codeine-network:
+    external: true
+    name: codeine-network

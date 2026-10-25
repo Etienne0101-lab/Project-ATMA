@@ -1,0 +1,41 @@
+# Codeine AI - Python Requirements
+# 
+# This file contains dependencies for the Codeine assistant and training pipeline.
+# Install with: pip install -r requirements.codeine.txt
+#
+
+# Core dependencies (required for all functionality)
+aiohttp>=3.8.0
+requests>=2.31.0
+
+# For Ollama backend support (optional, but recommended)
+ollama>=0.1.0
+
+# For training pipeline (optional, requires GPU)
+# Uncomment the following for training:
+# torch>=2.0.0
+# transformers>=4.30.0
+# datasets>=2.12.0
+# accelerate>=0.20.0
+# peft>=0.4.0
+# bitsandbytes>=0.40.0
+# scikit-learn>=1.2.0
+# wandb>=0.15.0
+# huggingface-hub>=0.16.0
+
+# For monitoring and logging
+# prometheus-client>=0.17.0
+
+# For testing
+# pytest>=7.4.0
+# pytest-asyncio>=0.21.0
+
+# Development dependencies
+# black>=23.0.0
+# ruff>=0.1.0
+# mypy>=1.4.0
+
+# Note: For GPU training, you'll need:
+# - PyTorch with CUDA support
+# - NVIDIA drivers and CUDA toolkit
+# - Sufficient GPU memory (24GB+ recommended for 7B models)
