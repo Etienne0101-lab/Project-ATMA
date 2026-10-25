@@ -120,12 +120,44 @@ commands shell/sleep/ls/ps/download/upload/exit/config, egress
   like a TLS handshake" (installer now carries unauthenticated
   proxy vars into `agent.env`).
 
+## Live callback + end-to-end tasking — proven 2026-10-24 21:01–21:07 EDT
+
+The built payload (`4c5765a1-…-linux-amd64`, from the dynamic build
+above) was run in the sandbox as user `mythic` (nohup, C2 server
+already listening on 127.0.0.1:18080):
+
+- PASS — callback registered: display_id 2, host `HTCH-RUNTIME`,
+  user `mythic`, os Linux x86_64, sleep_info http interval 10 /
+  jitter 23, last_checkin matching the running PID 30557. (A stale
+  display_id 1, user `root`, was also present — that was the
+  earlier 5-second `timeout` run during artifact verification, which
+  had already registered before it was killed. Both callbacks were
+  hidden after the test and the payload process killed.)
+- PASS — task 1 `config`, params `{}`: submitted → agent processing
+  → success in ~18s (two check-ins). Response decodes to the live
+  agent's identity: arch amd64, host htch-runtime, user mythic,
+  pid 30557, process_name `/build/4c5765a1-…-linux-amd64`.
+- PASS — task 6 `ps`, params `{}`: submitted → agent processing →
+  success, returning the sandbox's real process list (systemd,
+  postgres, nginx, mythic services) including PID 30557 itself.
+- NOTED, not a stack failure — `ls` via the raw GraphQL API:
+  tasks 3–5 completed with status `success` at the server, but the
+  agent returned a permission/structure error because Poseidon's
+  `ls` is driven by the UI file browser, not a plain CLI path
+  argument — my JSON `{"path":"/tmp","depth":1}` and plain `"/tmp"`
+  forms both fell back to the agent's default path (`.` = the
+  payload's cwd, `/home/hatch`, which mythic cannot read). The
+  agent *did* receive, execute, and answer those tasks — the
+  argument encoding was wrong for that command's UI path. `config`
+  and `ps` (no-arg commands) prove the tasking round-trip cleanly.
+- NOTED — task 2 `sleep` with my guessed params errored at task
+  creation ("Error: creating task"), i.e. the server rejected the
+  parameter shape before the agent ever saw it. Not pursued: sleep
+  is not needed to prove tasking, and its real parameter shape is
+  a UI-modal detail, not a native-stack gap.
+
 ## What is NOT yet proven
 
-- **Payload execution / live callback:** the built payload was
-  NOT run as a callback. Build + artifact verification is proven;
-  end-to-end tasking to a live callback is the next test, not a
-  claim made here.
 - **Other agents/C2:** Poseidon (Go) and the http C2 profile are
   installed natively. Apollo/Athena (.NET), Medusa (Python),
   Apfell (macOS-only build) and other C2 profiles (websocket, tcp,
