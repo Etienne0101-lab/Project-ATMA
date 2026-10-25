@@ -192,3 +192,12 @@ GraphQL-verified, sandbox, 2026-10-24 ~21:12–21:30 EDT:
 - dotnet restore Apollo + Athena: exit 0 both.
 - Athena raw sln build: 1 error (Agent.Crypto reference) — not
   claimed as a payload build; see README §19.
+
+## Athena modular WinExe, 2026-10-24 (Linux, dotnet 8.0.132)
+
+- Script: lab/native/athena-build-win.sh
+- Run: shell,ls,ps,config,exit, Http, http://127.0.0.1:18080,
+  uuid 366b1aa2-dcd1-490e-9474-33df1e0ea643, win-x64, Release
+- Result: AthenaCore.exe 37,571,461 bytes, PE32+ console x86-64,
+  10 sections, zip = single AthenaCore.exe. NOT run on Linux
+  (Windows binary), NOT pushed to the public repo (see brainstorm).

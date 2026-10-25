@@ -402,3 +402,21 @@ were composed natively:
   payload build was NOT claimed from this. Services, commands,
   and restores are the verified compose; a Windows payload build
   remains a Windows-host step.
+
+## §20 — Athena WinExe from Linux, modular publish (2026-10-24)
+
+Script: `lab/native/athena-build-win.sh` (permanent in this repo).
+It replicates Athena's Mythic builder staged flow, standalone:
+temp copy -> Http profile from Base.txt -> AgentConfig substitution
+-> `dotnet add AthenaCore reference` per command + profile + crypto
+-> build Agent.Models -> `dotnet publish AthenaCore -r win-x64`
+(self-contained, single-file, HandlerOS=windows) -> zip.
+Verified: commands shell,ls,ps,config,exit, http 127.0.0.1:18080,
+exe 37,571,461 bytes, `PE32+ executable (console) x86-64, for MS
+Windows, 10 sections`, zip contains single AthenaCore.exe.
+Bug fixed in the script: relative --output used to resolve inside
+the temp build dir and be deleted with it; output is now resolved
+to an absolute path before cd. Full record:
+`lab/native/athena-win-build-brainstorm.md`. The compiled exe
+itself is NOT committed to the public repo by default — it is
+reproducible from the script; see the brainstorm doc for why.
