@@ -89,18 +89,47 @@ scripts/units in this folder, and re-verified:
   copy + stop-before-overwrite (`Text file busy`) → all fixed in
   `install-agent-poseidon.sh`
 
+## Dynamic payload build — Poseidon, proven 2026-10-24 20:58 EDT
+
+After the core test, the http C2 profile was installed natively
+(`install-c2-http.sh`: service binary + `http/c2_code/mythic_http_server`,
+lab config 127.0.0.1:18080, no SSL; `c2profile` in GraphQL now includes
+`http`), and a real payload was created via the GraphQL
+`createPayload` mutation (Linux, poseidon, `poseidon-lab.bin`,
+commands shell/sleep/ls/ps/download/upload/exit/config, egress
+`["http"]`, http callback_host `http://127.0.0.1`, callback_port
+18080, interval 10, jitter 23).
+
+- PASS — payload UUID `4c5765a1-a559-46b8-908f-2b4e021b1d58`,
+  `build_phase: success` (~50s, mostly Go module downloads).
+- PASS — artifact `/build/4c5765a1-…-linux-amd64`: ELF 64-bit
+  x86-64, stripped, 6.7 MB, same BuildID as the server's copy in
+  `bin/files/` (the file the UI downloads).
+- PASS — **dynamic proof, not a static binary:** `strings` on the
+  artifact shows the Go `-X` ldflags baked in at build time —
+  `profiles.UUID=<payload UUID>`, `egress_order` base64 = `["http"]`,
+  and `http_initial_config` base64 decodes to exactly the submitted
+  parameters (callback_host, callback_port 18080, interval 10,
+  jitter 23, post_uri `data`).
+- Failures found on the way, all fixed in the scripts (see README
+  §15–16): `bin/files` missing → "Failed to create file on disk";
+  `/build` missing → "Failed to find final payload"; OPSEC check
+  rejects `callback_host` with a port (host must be port-less,
+  port goes in `callback_port`); agent service with no proxy env →
+  Go module downloads fail with "tls: first record does not look
+  like a TLS handshake" (installer now carries unauthenticated
+  proxy vars into `agent.env`).
+
 ## What is NOT yet proven
 
-- **Payload building:** Poseidon service syncs commands/definitions,
-  but building an actual Poseidon payload (agent_code, cross-compile
-  toolchains, C2 profile install) was not run. That is the next
-  real test, not a claim made here.
-- **Callbacks / live C2:** no callback was created and no payload
-  was executed. The core + agent service + GraphQL path are proven;
-  end-to-end tasking to a live callback is not.
-- **Other agents/C2:** only Poseidon (Go) was installed. Apollo/
-  Athena (.NET), Medusa (Python), Apfell (macOS-only build) and
-  C2 profiles (http, etc.) still need their own native installs.
+- **Payload execution / live callback:** the built payload was
+  NOT run as a callback. Build + artifact verification is proven;
+  end-to-end tasking to a live callback is the next test, not a
+  claim made here.
+- **Other agents/C2:** Poseidon (Go) and the http C2 profile are
+  installed natively. Apollo/Athena (.NET), Medusa (Python),
+  Apfell (macOS-only build) and other C2 profiles (websocket, tcp,
+  dynamichttp, etc.) still need their own native installs.
 - **Production host:** this test ran on a disposable sandbox VM.
   A real host (e.g. Oracle A1, or Stephen's Linux host) still needs
   `atma-native.sh install/build/env/start` run there, with its own

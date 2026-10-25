@@ -49,12 +49,33 @@ MYTHIC_SERVER_HOST=127.0.0.1
 MYTHIC_SERVER_GRPC_PORT=17444
 EOF
 chmod 600 "$INSTALL_DIR/agent.env"
+# Payload builds run `go build` as a child of this service, so the
+# service needs the SAME egress environment as an interactive shell:
+# without HTTP(S)_PROXY the agent_code module downloads fail with
+# "tls: first record does not look like a TLS handshake" on a
+# proxy-only host (verified 2026-10-24). Carry through only
+# unauthenticated proxy variables already present in the installer
+# shell — never write a proxy password into agent.env. On a direct-
+# internet host this block is a no-op and builds work as-is.
+for _v in HTTP_PROXY HTTPS_PROXY http_proxy https_proxy NO_PROXY no_proxy; do
+  if [ -n "${!_v:-}" ] && [[ "${!_v}" != *"@"* ]]; then
+    printf '%s=%s\n' "$_v" "${!_v}" >> "$INSTALL_DIR/agent.env"
+  fi
+done
 # Parent dir must also be mythic-owned: mkdir -p as root leaves
 # InstalledServices root:root 770, which blocks the mythic user's
 # WorkingDirectory chdir (systemd status 200/CHDIR).
 chown mythic:mythic "$MYTHIC_HOME/InstalledServices"
 chmod 750 "$MYTHIC_HOME/InstalledServices"
 chown -R mythic:mythic "$INSTALL_DIR"
+# Payload builder writes its output to /build/<uuid>-linux-amd64
+# (hard-coded in agentfunctions/builder.go, a Docker volume in the
+# official image). Natively that directory must exist and be
+# mythic-writable, otherwise a build compiles and then fails with
+# "Failed to find final payload".
+mkdir -p /build
+chown mythic:mythic /build
+chmod 700 /build
 # The generic agent unit expects <dir>/main + <dir>/agent.env.
 cp "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/systemd/mythic-agent@.service" /etc/systemd/system/
 systemctl daemon-reload

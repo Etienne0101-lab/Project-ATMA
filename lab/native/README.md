@@ -236,6 +236,23 @@ already in `atma-native.sh` and the units in this folder:
     leaves browserscripts/icon missing. `install-agent-poseidon.sh`
     copies the full directory, and the agent unit's parent dir
     must be `mythic`-owned or systemd fails with `200/CHDIR`.
+15. **Payload building needs three more native directories.**
+    The builder writes to hard-coded `/build/<uuid>-linux-amd64`
+    (a Docker volume upstream) and the server writes payload files
+    to `files/<uuid>` relative to its working directory (`bin/`).
+    Neither exists natively: `install-agent-poseidon.sh` now
+    creates `/build` (mythic-owned) and `atma-native.sh build`
+    creates `bin/files`, or `createPayload` fails with
+    "Failed to create file on disk" / "Failed to find final payload".
+16. **Payload builds need the host's egress environment.**
+    The builder runs `go build` as a child of the agent service,
+    which runs with only `agent.env` — no shell proxy. On a
+    proxy-only host, module downloads fail with
+    "tls: first record does not look like a TLS handshake".
+    The Poseidon installer now carries unauthenticated
+    `HTTP(S)_PROXY`/`NO_PROXY` from the installer shell into
+    `agent.env` (never a proxy password). On a direct-internet
+    host this is a no-op.
 
 ## What is NOT yet verified (do not skip this)
 
@@ -271,6 +288,12 @@ already in `atma-native.sh` and the units in this folder:
   the Docker Hub image, no Docker daemon.
 - `install-agent-poseidon.sh` — builds and installs the Poseidon
   agent service natively, with a systemd agent unit.
+- `install-c2-http.sh` — builds and installs the http C2 profile
+  natively (service binary + `http/c2_code/mythic_http_server` +
+  lab `config.json` on 127.0.0.1:18080, no SSL). Payloads must use
+  `callback_host` WITHOUT a port (`http://127.0.0.1`) and
+  `callback_port` 18080 — the OPSEC check rejects a host that
+  includes a port.
 - `test-real.sh` — endpoint checker for a real stack (health,
   login, GraphQL, metadata) — for a host without systemd, or as a
   checklist on a systemd host.

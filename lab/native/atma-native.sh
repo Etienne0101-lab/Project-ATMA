@@ -131,6 +131,11 @@ build() {
   # attack table stays empty (non-fatal, but a real functional gap).
   mkdir -p "$MYTHIC_BIN/utils/files"
   cp "$MYTHIC_SRC/mythic-docker/src/utils/files/attack.json" "$MYTHIC_BIN/utils/files/"
+  # Payload/file storage: GetSaveFilePath writes "files/<uuid>" relative
+  # to the server's working directory (bin/). In Docker that is a volume;
+  # natively the directory must exist or createPayload fails with
+  # "Failed to create file on disk" after 10 retries.
+  mkdir -p "$MYTHIC_BIN/files"
   [ -d "$MYTHIC_BIN/database/migrations" ] || die "database/migrations missing after copy — mythic_server will fatal on boot"
   [ "$(ls "$MYTHIC_BIN/database/migrations" | wc -l)" -gt 0 ] || die "database/migrations is empty"
   info "Extracting Hasura graphql-engine $HASURA_VERSION from Docker Hub (no Docker daemon, see bin/hasura-extract.py)..."
