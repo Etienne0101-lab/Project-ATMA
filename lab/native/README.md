@@ -483,3 +483,56 @@ default repo Etienne0101-lab/Project-ATMA (changeable in the
 panel — "maripo" was taken to mean this root project; correct the
 repo field if a different repo was meant). No unconditional admin
 write is granted to any model.
+
+## §23 — Same-host module: Mythic + Ollama + gateway on one VM (2026-10-24)
+
+One host, three services, one public door. This is the module
+Stephen chose over a separate cloud GPU box or a hosted API.
+
+  Mythic stack (atma-native.sh)   Ollama (install-ollama.sh)
+    postgres, rabbitmq, nginx       127.0.0.1:11434, localhost only
+    mythic-server, hasura           models in /opt/ollama/models
+         \                            /
+          \   atma-gateway.service  /
+           \  localhost:8787, token /
+            \______________________/
+                     |
+              Tailscale Serve :443
+                     |
+              Pages console (DeepHat AI view, Live Mythic tab)
+
+Install order on the production host (as root, from a repo checkout):
+  1. bash lab/native/atma-native.sh install/build/env/start  (Mythic)
+  2. bash lab/native/install-ollama.sh
+       — installs Ollama, pins OLLAMA_HOST=127.0.0.1:11434 via a
+         systemd drop-in, models in /opt/ollama/models, pulls
+         DeepHat/DeepHat-V1-7B unless --no-pull. It REFUSES to pull
+         below 10 GB free disk or 8 GB RAM (16 GB recommended) —
+         that guard is why the small Muse VM is not a DeepHat host.
+  3. bash lab/native/install-gateway.sh [--serve]
+       — copies agent/atma-gateway.mjs to /opt/atma/, installs
+         systemd/atma-gateway.service, generates
+         /opt/atma/atma-gateway.env (0600, host-only, never in the
+         repo) with ATMA_GATEWAY_TOKEN, MYTHIC_URL, OLLAMA_URL.
+         --serve also runs `tailscale serve --bg --https=443
+         http://127.0.0.1:8787`. Copy the token into Connect.
+  4. bash lab/native/check-same-host.sh [token]
+       — services, Mythic /health, Ollama /api/tags, gateway
+         /gateway/status, and the proxied /ollama route (401
+         without a token is the passing result there).
+  5. In the Pages console: DeepHat AI view -> Backend: Gateway,
+     Gateway URL = Serve HTTPS name, token = the generated one.
+     Live Mythic tab uses the same gateway + token.
+
+Verified 2026-10-24 on the rebuilt sandbox host (Mythic services
+active, real Ollama NOT installed there — RAM ~450 MB free, disk
+5.3 GB, so a real DeepHat pull was correctly out of scope):
+syntax for all three scripts + gateway JS, systemd-analyze
+verify clean for atma-gateway.service, and a stub Ollama on
+11434 behind the gateway: status shows mythic_proxy + ollama_proxy,
+/ollama/api/tags 401 without token and the model list with it,
+Mythic /health still 200 on the same host. Real DeepHat chat is
+NOT claimed on this sandbox — it needs the production host above
+with the model pulled. Supersedes server/deephat-ollama-setup.sh
+as the install path for a Mythic host (that script remains valid
+for a standalone Ollama-only host).

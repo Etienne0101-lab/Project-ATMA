@@ -1,0 +1,30 @@
+[Unit]
+Description=Project ATMA companion gateway (Mythic + Ollama proxy)
+After=network-online.target mythic-server.service ollama.service
+Wants=network-online.target
+# Mythic and Ollama are separate services; the gateway only proxies
+# to them on localhost. If either is down, its routes return 502 —
+# the gateway itself stays up so /gateway/status still answers.
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/atma
+# Node must be on PATH; on hosts where node lives elsewhere, set
+# ExecStart to the absolute node path (e.g. /usr/local/bin/node).
+ExecStart=/usr/bin/node /opt/atma/atma-gateway.mjs
+Restart=on-failure
+RestartSec=5
+# Secrets live ONLY in /opt/atma/atma-gateway.env (0600, root).
+# That file is generated on the host by install-gateway.sh and is
+# NEVER committed to the repo. It holds ATMA_GATEWAY_TOKEN and,
+# optionally, GROQ_API_KEY. MYTHIC_URL / OLLAMA_URL default to
+# https://127.0.0.1:7443 / http://127.0.0.1:11434.
+EnvironmentFile=/opt/atma/atma-gateway.env
+# Lab-only self-signed Mythic cert: set MYTHIC_INSECURE_TLS=1 in
+# the env file only on a lab host. Leave unset with a real cert.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
