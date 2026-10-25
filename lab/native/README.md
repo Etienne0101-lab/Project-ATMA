@@ -420,3 +420,42 @@ to an absolute path before cd. Full record:
 `lab/native/athena-win-build-brainstorm.md`. The compiled exe
 itself is NOT committed to the public repo by default — it is
 reproducible from the script; see the brainstorm doc for why.
+
+## §21 — Full rebuild after VM replacement (2026-10-24, evening)
+
+The sandbox stack from earlier in the day vanished on a VM
+replacement (~21:47); only ~/workspace persisted. The full native
+stack was rebuilt on the new host from this repo alone:
+atma-native.sh install -> build -> env -> start, then
+install-agent-poseidon.sh, install-c2-http.sh, install-python-agent.sh
+(medusa, apfell, nemesis, arachne, apollo, athena),
+install-agent-merlin.sh, install-python-c2.sh (websocket, tcp,
+dynamichttp, smb), install-go-c2.sh (httpx, dns).
+Verified after rebuild: 5 core services active (postgresql,
+rabbitmq-server, mythic-server, mythic-hasura, nginx), auth JWT,
+React UI /new/login 200, Hasura metadata applied, GraphQL
+payloadtype 8 (poseidon, medusa, apfell, nemesis, arachne, merlin,
+apollo, athena) and c2profile 8 (http, webshell, websocket, tcp,
+dynamichttp, smb, httpx, dns), Apollo 81 commands, Athena 125
+commands, Poseidon payload build success (ELF 6.7 MB, same size
+class as the original run).
+Rebuild fixes now in the installers (not manual-only):
+- atma-native.sh is executable again (its start() self-call to
+  status failed with "Permission denied" when the file lost +x;
+  the stack itself was unaffected) and install() now creates
+  /opt/mythic/go/{cache,tmp,pkg/mod} mythic-owned.
+- install-agent-poseidon.sh now writes GOPATH/GOCACHE/GOTMPDIR
+  (/opt/mythic/go/...) into agent.env, chowns /opt/mythic/go,
+  and seeds the agent_code module cache; new standalone
+  seed-poseidon-modules.sh does the same seeding on demand.
+  Without this, payload builds failed twice: first "could not
+  create module cache: permission denied" (root-owned go home),
+  then module downloads timing out through the unauthenticated
+  proxy. With the cache seeded, a Poseidon build completes in
+  under 10 seconds.
+- Payload build and callback/tasking verification for this
+  rebuild are in TEST-REPORT-2026-10-24.md §Rebuild.
+- NOT in the repo: /opt/mythic/bin/.env (generated, 0600,
+  admin + service passwords) and any proxy credential — those
+  stay on the host only. The repo holds everything needed to
+  regenerate the stack, not the secrets that run it.

@@ -98,7 +98,7 @@ install() {
   chmod 644 /etc/rabbitmq/enabled_plugins 2>/dev/null || true
   install_go_if_needed
   id "$MYTHIC_USER" >/dev/null 2>&1 || useradd --system --home-dir "$MYTHIC_HOME" --shell /usr/sbin/nologin "$MYTHIC_USER"
-  mkdir -p "$MYTHIC_HOME" "$MYTHIC_HOME"/{src,bin,files,logs} /var/lib/mythic/server /etc/mythic /var/www/mythic-new
+  mkdir -p "$MYTHIC_HOME" "$MYTHIC_HOME"/{src,bin,files,logs,go/cache,go/tmp,go/pkg/mod} /var/lib/mythic/server /etc/mythic /var/www/mythic-new
   chown -R "$MYTHIC_USER:$MYTHIC_USER" "$MYTHIC_HOME" /var/lib/mythic
   chmod 750 "$MYTHIC_HOME" /var/lib/mythic
   info "Packages installed. Next: build, then env, then start."

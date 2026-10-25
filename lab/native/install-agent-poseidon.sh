@@ -47,6 +47,13 @@ RABBITMQ_PASSWORD=${ENV[rabbitmq_password]}
 RABBITMQ_VHOST=mythic_vhost
 MYTHIC_SERVER_HOST=127.0.0.1
 MYTHIC_SERVER_GRPC_PORT=17444
+# Payload builds run `go build` as a child of this service, so the
+# child needs a writable Go home outside /tmp (512 MB tmpfs on some
+# hosts) and outside the service dir. /opt/mythic/go is the mythic
+# user's Go home: GOPATH, cache, and temp all live there.
+GOPATH=/opt/mythic/go
+GOCACHE=/opt/mythic/go/cache
+GOTMPDIR=/opt/mythic/go/tmp
 EOF
 chmod 600 "$INSTALL_DIR/agent.env"
 # Payload builds run `go build` as a child of this service, so the
@@ -68,6 +75,18 @@ done
 chown mythic:mythic "$MYTHIC_HOME/InstalledServices"
 chmod 750 "$MYTHIC_HOME/InstalledServices"
 chown -R mythic:mythic "$INSTALL_DIR"
+# The Go home must be mythic-owned BEFORE the first payload build:
+# a root-created /opt/mythic/go (e.g. by a Merlin build's tmp/cache)
+# makes the Poseidon build fail with "could not create module cache:
+# stat /opt/mythic/go/pkg/mod: permission denied". Seed the module
+# cache here too, so the first payload build does not have to
+# download modules through a slow proxy on its first run.
+mkdir -p "$MYTHIC_HOME/go/cache" "$MYTHIC_HOME/go/tmp" "$MYTHIC_HOME/go/pkg/mod"
+chown -R mythic:mythic "$MYTHIC_HOME/go"
+GOPATH="$MYTHIC_HOME/go" GOCACHE="$MYTHIC_HOME/go/cache" GOTMPDIR="$MYTHIC_HOME/go/tmp" \
+  go mod download -C "$INSTALL_DIR/poseidon/agent_code" 2>/dev/null || \
+  echo "[!] go mod download seeding failed — first payload build may be slow; re-run lab/native/seed-poseidon-modules.sh"
+chown -R mythic:mythic "$MYTHIC_HOME/go" 2>/dev/null || true
 # Payload builder writes its output to /build/<uuid>-linux-amd64
 # (hard-coded in agentfunctions/builder.go, a Docker volume in the
 # official image). Natively that directory must exist and be

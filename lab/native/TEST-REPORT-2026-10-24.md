@@ -201,3 +201,30 @@ GraphQL-verified, sandbox, 2026-10-24 ~21:12–21:30 EDT:
 - Result: AthenaCore.exe 37,571,461 bytes, PE32+ console x86-64,
   10 sections, zip = single AthenaCore.exe. NOT run on Linux
   (Windows binary), NOT pushed to the public repo (see brainstorm).
+
+## Rebuild verification, 2026-10-24 evening (new host, after VM replacement)
+
+- Core: postgresql, rabbitmq-server, mythic-server, mythic-hasura,
+  nginx all active; /health 200, Hasura /healthz 200,
+  nginx /new/login 200, / -> 301 to /new/login, auth JWT 241 chars.
+- GraphQL: payloadtype 8, c2profile 8, Apollo 81 commands,
+  Athena 125 commands (see README §21 for the full lists).
+- Poseidon payload: build_phase success in under 10 s after the
+  module cache was seeded; artifact ELF 64-bit x86-64, 6.7 MB.
+  Two build failures were fixed in the repo installers first
+  (go-home ownership, then module-download timeout) — see §21.
+- Gateway + Pages Live tab: gateway proxy code is in the repo
+  (agent/atma-gateway.mjs) and the Live tab is in docs/app-v5.js;
+  a fresh gateway live-check against the rebuilt stack was not
+  run in this rebuild pass — do not claim it was re-verified
+  until that check is run.
+
+## Gateway re-verification, 2026-10-24 evening (rebuilt stack)
+
+- Gateway (agent/atma-gateway.mjs, test instance, stopped after
+  check): /gateway/status ok, mythic_proxy true; wrong token 401;
+  /mythic/auth via gateway returned JWT 241 chars; /mythic/graphql
+  via gateway returned the same 8 payloadtypes + 8 C2 as direct.
+  The earlier "not re-verified" note in this report is superseded
+  by this check. The gateway is a run-when-needed process, not a
+  systemd service, so it is not running after the check.
