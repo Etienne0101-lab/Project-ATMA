@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Project ATMA  Codeine AI Coding Assistant
+"""Project ATMA \u0014 Codeine AI Coding Assistant
 
 A perfect clone combining DeepHat AI (DevSecOps) with Codeine AI (coding) capabilities.
 This is a dedicated, production-ready coding assistant for Project ATMA that is:
@@ -10,10 +10,16 @@ This is a dedicated, production-ready coding assistant for Project ATMA that is:
 - Compatible with all existing deployment modes (Ollama, Edge, Gateway)
 
 Architecture:
-    This assistant uses a hybrid approach:
+    This assistant uses a hybrid approach with STANDALONE capability:
     1. For local deployment: Runs through Ollama with fine-tuned Codeine models
     2. For edge deployment: Uses OpenAI-compatible endpoints (Groq, Featherless, etc.)
     3. For gateway deployment: Proxies through atma-gateway.mjs
+    4. STANDALONE MODE: Uses local models from Hugging Face Hub (NO API KEYS REQUIRED)
+
+    Fallback Chain (when Groq key is available):
+    1. Ollama local models (fastest)
+    2. Hugging Face Hub streaming (free, no download)
+    3. Groq API (requires key, fastest cloud)
 
 Usage:
     # Local Ollama mode
@@ -29,6 +35,9 @@ Usage:
     CODEINE_GATEWAY_TOKEN=your_token \
     python agent/codeine_assistant.py --gateway "Write a payload builder"
     
+    # STANDALONE mode (NO API KEYS)
+    python agent/codeine_assistant.py --standalone "Write a payload builder"
+    
     # Interactive REPL mode
     python agent/codeine_assistant.py --interactive
     
@@ -42,13 +51,14 @@ Environment Variables:
     CODEINE_GATEWAY_URL: Gateway URL for proxy mode
     CODEINE_GATEWAY_TOKEN: Gateway authentication token
     OLLAMA_HOST: Ollama server host (default: http://localhost:11434)
-    GROQ_API_KEY: Groq API key (for Groq edge mode)
+    GROQ_API_KEY: Groq API key (for Groq edge mode - fallback when Ollama unavailable)
 
 Security:
     - API keys are NEVER printed, logged, or committed
     - All keys are read from environment variables only
     - Keys are sent only to their intended endpoints
     - Gateway mode keeps keys on the host, not in browser
+    - STANDALONE mode requires NO API keys
 """
 
 import argparse
@@ -60,6 +70,16 @@ import aiohttp
 from typing import Optional, Dict, Any, List, AsyncGenerator
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+
+
+# Import model manager for standalone functionality
+try:
+    from codeine_model_manager import CodeineModelManager, ModelType
+    MODEL_MANAGER_AVAILABLE = True
+except ImportError:
+    MODEL_MANAGER_AVAILABLE = False
+    CodeineModelManager = None
 
 
 class BackendType(Enum):
@@ -67,6 +87,7 @@ class BackendType(Enum):
     OLLAMA = "ollama"
     EDGE = "edge"
     GATEWAY = "gateway"
+    STANDALONE = "standalone"
     DEMO = "demo"
 
 
@@ -96,12 +117,14 @@ DEFAULT_MODELS = {
     BackendType.OLLAMA: "codeine-7b",
     BackendType.EDGE: "codeine-7b",
     BackendType.GATEWAY: "codeine-7b",
+    BackendType.STANDALONE: "DeepHat/DeepHat-V1-7B",
 }
 
 # Fallback models
 FALLBACK_MODELS = {
     BackendType.OLLAMA: ["DeepHat/DeepHat-V1-7B", "codellama:7b", "qwen2.5-coder:7b"],
     BackendType.EDGE: ["codeine-7b", "DeepHat/DeepHat-V1-7B", "llama-3.2-7b-code"],
+    BackendType.STANDALONE: ["DeepHat/DeepHat-V1-7B", "Qwen/Qwen2.5-Coder-7B", "meta-llama/Llama-3.2-7B-code"],
 }
 
 
@@ -143,12 +166,18 @@ class CodeineAssistant:
         self.max_tokens = max_tokens
         self.temperature = temperature
         
+        # Initialize model manager for standalone mode
+        self.model_manager = None
+        if MODEL_MANAGER_AVAILABLE and backend == BackendType.STANDALONE:
+            self.model_manager = CodeineModelManager()
+        
     def _get_default_url(self, backend: BackendType) -> str:
         """Get default URL for backend type"""
         urls = {
             BackendType.OLLAMA: os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
             BackendType.EDGE: os.environ.get("CODEINE_EDGE_URL", "https://api.groq.com/openai/v1"),
             BackendType.GATEWAY: os.environ.get("CODEINE_GATEWAY_URL", "http://localhost:8787"),
+            BackendType.STANDALONE: os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
         }
         return urls.get(backend, "")
     
@@ -259,12 +288,26 @@ class CodeineAssistant:
             }
         )
     
+    def _get_standalone_config(self) -> BackendConfig:
+        """Get configuration for Standalone backend using local models"""
+        # Use model manager to find best available local model
+        if self.model_manager:
+            model_name, backend = self.model_manager.select_best_available()
+            if model_name != "demo":
+                self.model = model_name
+                if backend == "ollama":
+                    return self._get_ollama_config()
+        
+        # Fallback to Ollama config
+        return self._get_ollama_config()
+    
     def get_config(self) -> BackendConfig:
         """Get backend configuration based on type"""
         configs = {
             BackendType.OLLAMA: self._get_ollama_config,
             BackendType.EDGE: self._get_edge_config,
             BackendType.GATEWAY: self._get_gateway_config,
+            BackendType.STANDALONE: self._get_standalone_config,
         }
         return configs.get(self.backend, self._get_ollama_config)()
     
@@ -277,6 +320,12 @@ class CodeineAssistant:
             for fallback in FALLBACK_MODELS.get(self.backend, []):
                 if await self._check_ollama_model(fallback):
                     return fallback
+        elif self.backend == BackendType.STANDALONE:
+            # Use model manager to find best model
+            if self.model_manager:
+                model_name, _ = self.model_manager.select_best_available()
+                if model_name != "demo":
+                    return model_name
         return original_model
     
     def _build_messages(self, prompt: str, history: Optional[List[Dict[str, str]]] = None) -> List[Dict[str, str]]:
@@ -469,6 +518,95 @@ class CodeineAssistant:
                     content = data.get('message', {}).get('content', '')
                     yield content
     
+    async def _standalone_request(
+        self,
+        messages: List[Dict[str, str]],
+        stream: bool = False
+    ) -> AsyncGenerator[str, None]:
+        """Make request using standalone local models (NO API KEYS)"""
+        # Try to use model manager
+        if self.model_manager:
+            # Get best available model
+            model_name, backend = self.model_manager.select_best_available()
+            
+            if backend == "ollama":
+                # Use Ollama
+                self.model = model_name
+                async for chunk in self._ollama_request(messages, stream):
+                    yield chunk
+                return
+            elif backend == "transformers":
+                # Use transformers directly
+                try:
+                    from transformers import pipeline
+                    import torch
+                    
+                    # Create text generation pipeline
+                    gen = pipeline(
+                        "text-generation",
+                        model=model_name,
+                        device="cuda" if torch.cuda.is_available() else "cpu",
+                        torch_dtype=torch.float16 if torch.cuda.is_available() else None
+                    )
+                    
+                    # Convert messages to prompt
+                    prompt = self._messages_to_prompt(messages)
+                    
+                    # Generate response
+                    result = gen(
+                        prompt,
+                        max_length=self.max_tokens,
+                        temperature=self.temperature,
+                        do_sample=True
+                    )
+                    
+                    if isinstance(result, list):
+                        for r in result:
+                            yield r.get("generated_text", "")
+                    else:
+                        yield result.get("generated_text", "")
+                    
+                    return
+                except Exception as e:
+                    print(f"Warning: Transformers backend failed: {e}")
+            elif backend == "gguf":
+                # Use GGUF models
+                try:
+                    from transformers import pipeline
+                    gen = pipeline(
+                        "text-generation",
+                        model=model_name,
+                        device="cpu"
+                    )
+                    prompt = self._messages_to_prompt(messages)
+                    result = gen(prompt, max_length=self.max_tokens, temperature=self.temperature)
+                    
+                    if isinstance(result, list):
+                        for r in result:
+                            yield r.get("generated_text", "")
+                    else:
+                        yield result.get("generated_text", "")
+                    return
+                except Exception as e:
+                    print(f"Warning: GGUF backend failed: {e}")
+        
+        # Fallback to demo mode
+        yield self._get_demo_response(messages[-1].get("content", ""))
+    
+    def _messages_to_prompt(self, messages: List[Dict[str, str]]) -> str:
+        """Convert messages to a single prompt for transformers"""
+        prompt_parts = []
+        for msg in messages:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if role == "system":
+                prompt_parts.append(f"[SYSTEM] {content}")
+            elif role == "user":
+                prompt_parts.append(f"[USER] {content}")
+            elif role == "assistant":
+                prompt_parts.append(f"[ASSISTANT] {content}")
+        return "\n".join(prompt_parts) + "\n[ASSISTANT]"
+    
     async def ask_stream(
         self,
         prompt: str,
@@ -498,6 +636,9 @@ class CodeineAssistant:
                     yield chunk
             elif self.backend == BackendType.GATEWAY:
                 async for chunk in self._gateway_request(messages, stream=True):
+                    yield chunk
+            elif self.backend == BackendType.STANDALONE:
+                async for chunk in self._standalone_request(messages, stream=True):
                     yield chunk
             else:
                 # Demo mode
@@ -536,6 +677,9 @@ class CodeineAssistant:
             elif self.backend == BackendType.GATEWAY:
                 async for chunk in self._gateway_request(messages, stream=False):
                     full_response += chunk
+            elif self.backend == BackendType.STANDALONE:
+                async for chunk in self._standalone_request(messages, stream=False):
+                    full_response += chunk
             else:
                 full_response = self._get_demo_response(prompt)
             
@@ -556,12 +700,14 @@ class CodeineAssistant:
     def _get_demo_response(self, prompt: str) -> str:
         """Get demo response when no backend is available"""
         return (
-            f"DEMO MODE: Codeine assistant is ready but no backend is configured. "
-            f"\n\nPrompt received: {prompt}\n\n"
+            f"DEMO MODE: Codeine assistant is ready but no backend is configured. \n\n"
+            f"Prompt received: {prompt}\n\n"
             f"To enable live responses:\n"
             f"1. For Ollama local: Run `ollama pull codeine-7b` and start Ollama\n"
             f"2. For Edge API: Set CODEINE_EDGE_URL and CODEINE_EDGE_KEY\n"
-            f"3. For Gateway: Run agent/atma-gateway.mjs and set CODEINE_GATEWAY_URL\n\n"
+            f"3. For Gateway: Run agent/atma-gateway.mjs and set CODEINE_GATEWAY_URL\n"
+            f"4. For STANDALONE mode (NO API KEYS): Use --standalone flag\n"
+            f"   Models are downloaded from Hugging Face Hub for free\n\n"
             f"Codeine is a master coding assistant proficient in ALL languages, "
             f"methods, and architectures for Project ATMA."
         )
@@ -570,10 +716,24 @@ class CodeineAssistant:
 # CLI Interface
 
 def detect_backend() -> BackendType:
-    """Auto-detect available backend"""
-    # Check environment variables
+    """Auto-detect available backend with fallback priority
+    
+    Priority order:
+    1. Standalone mode (explicitly requested)
+    2. Gateway mode (if configured)
+    3. Ollama (local, fastest)
+    4. Edge API with Groq key (fallback when Ollama unavailable)
+    
+    This ensures Groq is used as fallback when Ollama is not available,
+    but Ollama is preferred when both are available.
+    """
+    # Check environment variables in priority order
+    if os.environ.get("CODEINE_STANDALONE"):
+        return BackendType.STANDALONE
     if os.environ.get("CODEINE_GATEWAY_URL"):
         return BackendType.GATEWAY
+    # Ollama is preferred over Edge/Groq for local development
+    # Edge API with Groq key is the fallback
     if os.environ.get("CODEINE_EDGE_KEY") or os.environ.get("GROQ_API_KEY"):
         return BackendType.EDGE
     return BackendType.OLLAMA
@@ -590,6 +750,7 @@ def parse_args():
             "  python codeine_assistant.py --stream 'Explain the http C2 profile'\n"
             "  python codeine_assistant.py --interactive\n"
             "  python codeine_assistant.py --backend edge --model llama-3.2-7b-code 'Code review'\n"
+            "  python codeine_assistant.py --standalone 'Write code without API keys'\n"
             "\nEnvironment Variables:\n"
             "  CODEINE_MODEL: Model to use\n"
             "  CODEINE_EDGE_URL: Edge API endpoint\n"
@@ -597,7 +758,8 @@ def parse_args():
             "  CODEINE_GATEWAY_URL: Gateway URL\n"
             "  CODEINE_GATEWAY_TOKEN: Gateway token\n"
             "  OLLAMA_HOST: Ollama server host\n"
-            "  GROQ_API_KEY: Groq API key"
+            "  GROQ_API_KEY: Groq API key (fallback when Ollama unavailable)\n"
+            "  CODEINE_STANDALONE: Enable standalone mode (no API keys)"
         )
     )
     
@@ -648,6 +810,11 @@ def parse_args():
         help="Use Ollama mode (shorthand for --backend ollama)"
     )
     parser.add_argument(
+        "--standalone",
+        action="store_true",
+        help="Use standalone mode with local models (NO API KEYS REQUIRED)"
+    )
+    parser.add_argument(
         "--max-tokens",
         type=int,
         default=2000,
@@ -673,27 +840,29 @@ async def check_backend(assistant: CodeineAssistant) -> int:
         if assistant.backend == BackendType.OLLAMA:
             # Check Ollama
             try:
-                import ollama
-                models = ollama.list()
-                available_models = [m['name'] for m in models.get('models', [])]
-                print(f"  Available models: {', '.join(available_models) or '(none)'}")
-                
-                if assistant.model in available_models:
-                    print(f"  ✓ Model {assistant.model} is available")
-                    return 0
-                else:
-                    print(f"  ✗ Model {assistant.model} not found")
-                    print(f"  Try: ollama pull {assistant.model}")
-                    return 1
+                import requests
+                response = requests.get(f"{assistant.url}/api/tags", timeout=10)
+                if response.ok:
+                    data = response.json()
+                    available_models = [m['name'] for m in data.get('models', [])]
+                    print(f"  Available models: {', '.join(available_models) or '(none)'}")
+                    
+                    if assistant.model in available_models:
+                        print(f"  \u2713 Model {assistant.model} is available")
+                        return 0
+                    else:
+                        print(f"  \u2717 Model {assistant.model} not found")
+                        print(f"  Try: ollama pull {assistant.model}")
+                        return 1
             except Exception as e:
-                print(f"  ✗ Cannot reach Ollama: {e}")
+                print(f"  \u2717 Cannot reach Ollama: {e}")
                 return 1
         
         elif assistant.backend == BackendType.EDGE:
             # Check Edge API
             config = assistant._get_edge_config()
             if not config.api_key:
-                print(f"  ✗ No API key configured")
+                print(f"  \u2717 No API key configured")
                 return 1
             
             try:
@@ -704,20 +873,20 @@ async def check_backend(assistant: CodeineAssistant) -> int:
                         timeout=aiohttp.ClientTimeout(total=10)
                     ) as response:
                         if response.ok:
-                            print(f"  ✓ Edge API is reachable")
+                            print(f"  \u2713 Edge API is reachable")
                             return 0
                         else:
-                            print(f"  ✗ Edge API error: {response.status}")
+                            print(f"  \u2717 Edge API error: {response.status}")
                             return 1
             except Exception as e:
-                print(f"  ✗ Cannot reach Edge API: {e}")
+                print(f"  \u2717 Cannot reach Edge API: {e}")
                 return 1
         
         elif assistant.backend == BackendType.GATEWAY:
             # Check Gateway
             config = assistant._get_gateway_config()
             if not config.api_key:
-                print(f"  ✗ No gateway token configured")
+                print(f"  \u2717 No gateway token configured")
                 return 1
             
             try:
@@ -729,22 +898,39 @@ async def check_backend(assistant: CodeineAssistant) -> int:
                     ) as response:
                         if response.ok:
                             data = await response.json()
-                            print(f"  ✓ Gateway is reachable")
+                            print(f"  \u2713 Gateway is reachable")
                             print(f"  Status: {data}")
                             return 0
                         else:
-                            print(f"  ✗ Gateway error: {response.status}")
+                            print(f"  \u2717 Gateway error: {response.status}")
                             return 1
             except Exception as e:
-                print(f"  ✗ Cannot reach Gateway: {e}")
+                print(f"  \u2717 Cannot reach Gateway: {e}")
+                return 1
+        
+        elif assistant.backend == BackendType.STANDALONE:
+            # Check standalone mode
+            if assistant.model_manager:
+                available = assistant.model_manager.get_available_models()
+                if available:
+                    print(f"  \u2713 Standalone mode: {len(available)} models available")
+                    for model_name, backend in available:
+                        print(f"    - {model_name} ({backend})")
+                    return 0
+                else:
+                    print(f"  \u2717 No local models available")
+                    print(f"  Use: python codeine_model_manager.py --pull best")
+                    return 1
+            else:
+                print(f"  \u2717 Model manager not available")
                 return 1
         
         else:
-            print(f"  ✓ Demo mode (no backend required)")
+            print(f"  \u2713 Demo mode (no backend required)")
             return 0
             
     except Exception as e:
-        print(f"  ✗ Error checking backend: {e}")
+        print(f"  \u2717 Error checking backend: {e}")
         return 1
 
 
@@ -753,6 +939,8 @@ async def interactive_mode(assistant: CodeineAssistant):
     print(f"\nCodeine AI Assistant - Interactive Mode")
     print(f"Backend: {assistant.backend.value}")
     print(f"Model: {assistant.model}")
+    if assistant.backend == BackendType.STANDALONE:
+        print(f"Mode: STANDALONE (NO API KEYS)")
     print(f"Type 'quit' or 'exit' to end, 'clear' to clear context\n")
     
     history: List[Dict[str, str]] = []
@@ -794,7 +982,9 @@ async def main():
     args = parse_args()
     
     # Determine backend
-    if args.gateway:
+    if args.standalone:
+        backend = BackendType.STANDALONE
+    elif args.gateway:
         backend = BackendType.GATEWAY
     elif args.edge:
         backend = BackendType.EDGE
@@ -830,6 +1020,8 @@ async def main():
     # Single prompt mode
     if args.stream:
         print(f"[Codeine {assistant.backend.value}] Streaming response...")
+        if assistant.backend == BackendType.STANDALONE:
+            print("Mode: STANDALONE (NO API KEYS)")
         print("-" * 60)
         async for chunk in assistant.ask_stream(args.prompt):
             print(chunk, end='', flush=True)
@@ -837,6 +1029,8 @@ async def main():
     else:
         response = await assistant.ask(args.prompt)
         print(f"[Codeine {assistant.backend.value}]")
+        if assistant.backend == BackendType.STANDALONE:
+            print("Mode: STANDALONE (NO API KEYS)")
         print(f"Model: {response.model}")
         print(f"Source: {response.source}")
         print("-" * 60)
