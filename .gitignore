@@ -1,0 +1,38 @@
+# Project ATMA - Git Ignore
+
+# Mythic Server
+mythic-server/.env
+mythic-server/.env.*
+mythic-server/mythic-cli
+mythic-server/*.log
+mythic-server/logs/
+mythic-server/data/
+mythic-server/volumes/
+
+# Node modules
+node_modules/
+
+# Build artifacts
+build/
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment files
+.env
+.env.local
+
+# Docker
+.docker/

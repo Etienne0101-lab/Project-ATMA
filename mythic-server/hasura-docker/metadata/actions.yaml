@@ -1,0 +1,1014 @@
+actions:
+  - name: addAttackToTask
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/add_attack_to_task_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Adds the specified MITRE ATT&CK Technique to the task specified by this display id
+  - name: c2GetIOC
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/get_ioc_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Using the UUID of a payload, ask's that payload's C2 Profiles to generate a list of IOCs
+  - name: c2HostFile
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/c2profile_host_file_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Using the file specified by its UUID, asks the C2 Profile specified by its ID to either host or stop hosting at a specific URL
+  - name: c2SampleMessage
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/sample_message_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Using the UUID of a payload, ask's that payload's C2 Profiles to generate a sample message of what traffic would look like
+  - name: callbackgraphedge_add
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/callbackgraphedge_add_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Adds an active graph edge between the two callbacks specified by their ID via the C2 Profile specified by its Name
+  - name: callbackgraphedge_remove
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/callbackgraphedge_remove_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Removes an active graph edge specified by its ID
+  - name: config_check
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/config_check_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Using the UUID of a payload, ask's that payload's C2 Profiles to check if the Payload's configuration matches with the configuration for the profile itself.
+  - name: consumingServicesTestLog
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/consuming_services_test_log'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: This sends a test logging message to logging containers of a specific type
+  - name: consumingServicesTestWebhook
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/consuming_services_test_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: This sends a test webhook message to webhook containers of a specific type
+  - name: containerDownloadFile
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/container_download_file_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: This downloads a file from within an Installed Service
+  - name: containerListFiles
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/container_list_files_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: This lists the files from within an Installed Service Container
+  - name: containerRemoveFile
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/container_remove_file_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: This removes a file from within an Installed Service Container
+  - name: containerWriteFile
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/container_write_file_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: This writes a file within an Installed Service Container
+  - name: createAPIToken
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/generate_apitoken_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: developer
+      - role: mythic_admin
+      - role: operation_admin
+      - role: operator
+    comment: Generate an apitoken of a specified type (typically 'User'), optionally for a specific bot account and with a specific name
+  - name: createArtifact
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/artifact_create_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Generate an artifact and optionally associate it with a specific task by its task ID
+  - name: createCallback
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/create_callback_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Create a new callback within Mythic automatically without needing an actual payload to phone home
+  - name: createCredential
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/create_credential_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Create a new credential within Mythic's credential store
+  - name: createInviteLink
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/create_invite_link_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: mythic_admin
+    comment: Create a new invite link
+  - name: createOperation
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/create_operation_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Creates a new operation
+  - name: createOperationEventLog
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/create_operation_event_log'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Creates a new operational event log message
+  - name: createOperator
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/create_operator'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: developer
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+    comment: Create a new operator account
+  - name: createPayload
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/createpayload_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: developer
+      - role: mythic_admin
+      - role: operation_admin
+      - role: operator
+    comment: Trigger a new payload creation based on a payload definition
+  - name: createRandom
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/randomize_parameter_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: developer
+      - role: mythic_admin
+      - role: operation_admin
+      - role: operator
+      - role: spectator
+    comment: Creates a random value based on the given format string (regex)
+  - name: createTag
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/tag_create_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Creates a new tag based on the specified tag type and associates it with another object
+  - name: createTask
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/create_task_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: developer
+      - role: mythic_admin
+      - role: operation_admin
+      - role: operator
+    comment: Creates a new task in Mythic for the specified callback_id or callback_ids (display ids)
+  - name: create_c2_instance
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/create_c2parameter_instance_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Creates a new saved instance of a C2 Profile with a given name
+  - name: custombrowserExportFunction
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/custombrowser_export_function_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: deleteAPIToken
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/delete_apitoken_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Update a given apitoken to be marked as deleted
+  - name: deleteBlockList
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/delete_disabled_command_profile_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Delete the specified block list by name
+  - name: deleteBlockListEntry
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/delete_disabled_command_profile_entry_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Remove the specified commands by their IDs from the specified block list by name
+  - name: deleteFile
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/delete_file_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Deletes the specified file or files by their IDs
+  - name: deleteTagtype
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/tagtype_delete_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: delete tagtype and cascade delete all associated tags
+  - name: deleteTasksAndCallbacks
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/delete_tasks_and_callbacks_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: mythic_admin
+    comment: Delete the specified tasks and callbacks by their display IDs
+  - name: download_bulk
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/download_bulk_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Zip and host a group of files specified by their file UUIDs. Use the resulting file_id to download the zip
+  - name: dynamicQueryBuildParameterFunction
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/dynamic_query_build_parameter_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: dynamic_query_function
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/dynamic_query_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Call a command parameter's dynamic query function
+  - name: eventingExportWorkflow
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_export_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Export an eventing workflow's configuration file
+  - name: eventingImportContainerWorkflow
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_import_automatic_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Import a workflow from a container automatically
+  - name: eventingTestFile
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_test_file_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Given an eventing file, convert it to a specified output format (json, yaml, toml)
+  - name: eventingTriggerCancel
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_trigger_cancel_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Cancel the specified running event group instance by ID
+  - name: eventingTriggerKeyword
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_trigger_keyword_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Trigger eventing workflows by keyword string and JSON dictionary data
+  - name: eventingTriggerManual
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_trigger_manual_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Trigger eventing workflow manually by eventgroup id and JSON dictionary data
+  - name: eventingTriggerManualBulk
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_trigger_manual_bulk_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Trigger multiple eventing workflow manually by eventgroup id and JSON dictionary data for specified contexts. Context type can be callback_id or task_id and those IDs should be in the context ids array
+  - name: eventingTriggerRetry
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_trigger_retry_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Manually retry a specified eventgroup instance by ID
+  - name: eventingTriggerRetryFromStep
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_trigger_retry_from_step_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Manually retry an eventgroup instance from a specific instance step by ID
+  - name: eventingTriggerRunAgain
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_trigger_runagain_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Manually run an eventgroup again with the same data
+  - name: eventingTriggerUpdate
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_trigger_update_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+    comment: Update an event group
+  - name: exportCallbackConfig
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/export_callback_config_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: exportPayloadConfig
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/export_payload_config_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: generateReport
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/reporting_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: getGlobalSettings
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/get_global_settings_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: getInviteLinks
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/get_invite_link_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: mythic_admin
+  - name: getOperatorPreferences
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/operator_get_preferences_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: getOperatorSecrets
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/operator_get_secrets_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: getProfileOutput
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/c2profile_status_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: developer
+      - role: mythic_admin
+      - role: operation_admin
+      - role: operator
+  - name: importCallbackConfig
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/callback_import_config_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: importTagtypes
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/tagtype_import_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: import_c2_instance
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/import_c2parameter_instance_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: meHook
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/me_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: previewFile
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/preview_file_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: rebuild_payload
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/rebuild_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: redirect_rules
+    definition:
+      kind: ""
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/redirect_rules_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: reissue_task
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/reissue_task_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: reissue_task_handler
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/reissue_task_handler_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: requestOpsecBypass
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/request_opsec_bypass_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: developer
+      - role: mythic_admin
+      - role: operation_admin
+      - role: operator
+  - name: sendExternalWebhook
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/send_external_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: startStopProfile
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/start_stop_profile_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: developer
+      - role: mythic_admin
+      - role: operation_admin
+      - role: operator
+  - name: testProxy
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/test_proxy_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: toggleProxy
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/toggle_proxy_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: typedarray_parse_function
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/typedarray_parse_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: updateCallback
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/update_callback_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: developer
+      - role: mythic_admin
+      - role: operation_admin
+      - role: operator
+  - name: updateCurrentOperation
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/update_current_operation_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: updateEventGroupApproval
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/eventing_update_eventgroupapproval_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: updateGlobalSettings
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/update_global_settings_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: mythic_admin
+  - name: updateInviteLink
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/update_invite_link_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: mythic_admin
+  - name: updateOperation
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/update_operation_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operation_admin
+      - role: mythic_admin
+  - name: updateOperatorOperation
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/update_operatoroperation_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: updateOperatorPreferences
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/operator_update_preferences_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: updateOperatorSecrets
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/operator_update_secrets_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: updateOperatorStatus
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/update_operator_status_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: developer
+      - role: mythic_admin
+  - name: updatePasswordAndEmail
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/update_operator_password_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: spectator
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+  - name: updatePayload
+    definition:
+      kind: synchronous
+      handler: '{{MYTHIC_ACTIONS_URL_BASE}}/update_payload_webhook'
+      forward_client_headers: true
+    permissions:
+      - role: operator
+      - role: operation_admin
+      - role: mythic_admin
+      - role: developer
+custom_types:
+  enums: []
+  input_objects:
+    - name: OperatorInput
+    - name: CreatePayloadInput
+    - name: updateCallbackInput
+    - name: DictionaryEntry
+    - name: tagtypeInput
+    - name: NewCallbackConfig
+    - name: newCallbackConfig
+    - name: disabledCommand
+  objects:
+    - name: createAPITokenResponse
+    - name: OperatorOutput
+    - name: createPayloadOutput
+    - name: randomOutput
+    - name: startStopOutput
+    - name: ProfileOutput
+    - name: ContainerFile
+    - name: uploadContainerOutput
+    - name: SampleOutput
+      relationships:
+        - field_mapping:
+            id: id
+          name: task
+          remote_table:
+            name: task
+            schema: public
+          source: default
+          type: object
+    - name: createTaskOutput
+      relationships:
+        - field_mapping:
+            id: id
+          name: task
+          remote_table:
+            name: task
+            schema: public
+          source: default
+          type: object
+    - name: BypassOutput
+    - name: updateCallbackOutput
+    - name: BulkDownloadOutput
+    - name: dynamicQueryOutput
+    - name: rebuildOutput
+    - name: redirectOutput
+    - name: ConfigCheckOutput
+    - name: createc2instanceOutput
+    - name: PayloadConfig
+    - name: ReissueTaskOutput
+    - name: ReissueTaskHandlerOutput
+    - name: StopSocksOutput
+    - name: deletionOutput
+    - name: passwordUpdateOutput
+    - name: updateCurrentOperationOutput
+    - name: deleteBlockListOutput
+    - name: deleteBlockListEntryOutput
+    - name: createOperationOutput
+      relationships:
+        - field_mapping:
+            operation_id: id
+          name: operation
+          remote_table:
+            name: operation
+            schema: public
+          source: default
+          type: object
+    - name: generateReportOutput
+    - name: previewFileOutput
+    - name: meHookOutput
+    - name: deleteTasksAndCallbacksOutput
+    - name: sendExternalWebhookOutput
+    - name: deleteTagtypeOutput
+    - name: importTagtypesOutput
+    - name: CallbackgraphedgeAddOutput
+    - name: CallbackgraphedgeRemoveOutput
+    - name: createCallbackOutput
+    - name: consumingServicesOutput
+    - name: consumingServicesTestOutput
+    - name: consumingServicesTestLogOutput
+    - name: c2ProfileListFilesOutput
+    - name: removeContainerFileOutput
+    - name: addAttackToTaskOutput
+    - name: updateOperationOutput
+    - name: updateOperatorOperationOutput
+    - name: createCredentialOutput
+    - name: createOperationEventLogOutput
+    - name: GetIOCOutput
+    - name: C2SampleMessageOutput
+    - name: consumingServicesListOutput
+    - name: c2HostFileOutput
+    - name: typedarrayParseOutput
+    - name: ToggleProxyOutput
+    - name: toggleProxyOutput
+    - name: updateOperatorStatusOutput
+    - name: updateGlobalSettingsOutput
+    - name: globalSettingsOutput
+    - name: exportCallbackConfigOutput
+    - name: importCallbackConfigOutput
+    - name: getOperatorSecretsOutput
+    - name: updateOperatorSecretsOutput
+    - name: eventingManualTriggerOutput
+    - name: eventingTriggerManualOutput
+    - name: updateEventGroupApprovalOutput
+    - name: eventingTriggerCancelOutput
+    - name: deleteAPITokenOutput
+    - name: eventingTriggerKeywordOutput
+    - name: eventingTriggerRetryOutput
+    - name: eventingTriggerRunAgainOutput
+    - name: eventingTriggerUpdateOutput
+    - name: createInviteLinkOutput
+    - name: getInviteLinksOutput
+    - name: deleteInviteLinkOutput
+    - name: containerRemoveFileOutput
+    - name: containerListFilesOutput
+    - name: containerUploadFileOutput
+    - name: containerWriteFileOutput
+    - name: eventingTriggerRetryFromStepOutput
+    - name: testProxyOutput
+    - name: eventingTestFileOutput
+    - name: getOperatorPreferencesOutput
+    - name: updateOperatorPreferencesOutput
+    - name: updateInviteLinkOutput
+    - name: eventingExportWorkflowOutput
+    - name: eventingImportContainerWorkflowOutput
+    - name: createTagOutput
+      relationships:
+        - field_mapping:
+            id: id
+          name: tag
+          remote_table:
+            name: tag
+            schema: public
+          source: default
+          type: object
+    - name: dynamicQueryOutputChoice
+    - name: createArtifactOutput
+    - name: updatePayloadOutput
+    - name: eventingTriggerManualBulkOutput
+    - name: dynamicQueryBuildParameterOutput
+    - name: custombrowserExportFunctionOutput
+  scalars: []

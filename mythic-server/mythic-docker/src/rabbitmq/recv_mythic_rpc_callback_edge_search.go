@@ -1,0 +1,117 @@
+package rabbitmq
+
+import (
+	"encoding/json"
+	"time"
+
+	"github.com/its-a-feature/Mythic/database"
+	databaseStructs "github.com/its-a-feature/Mythic/database/structs"
+	"github.com/its-a-feature/Mythic/logging"
+	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+type MythicRPCCallbackEdgeSearchMessage struct {
+	AgentCallbackUUID     string  `json:"agent_callback_id"`
+	AgentCallbackID       int     `json:"callback_id"`
+	SearchC2ProfileName   *string `json:"search_c2_profile_name"`
+	SearchActiveEdgesOnly *bool   `json:"search_active_edges_only"`
+}
+type MythicRPCCallbackEdgeSearchMessageResult struct {
+	ID             int                      `mapstructure:"id" json:"id"`
+	StartTimestamp time.Time                `mapstructure:"start_timestamp" json:"start_timestamp"`
+	EndTimestamp   time.Time                `mapstructure:"end_timestamp" json:"end_timestamp"`
+	Source         databaseStructs.Callback `mapstructure:"source" json:"source"`
+	Destination    databaseStructs.Callback `mapstructure:"destination" json:"destination"`
+	C2Profile      string                   `mapstructure:"c2profile_name" json:"c2profile"`
+}
+type MythicRPCCallbackEdgeSearchMessageResponse struct {
+	Success bool                                       `json:"success"`
+	Error   string                                     `json:"error"`
+	Results []MythicRPCCallbackEdgeSearchMessageResult `json:"results"`
+}
+
+func init() {
+	RabbitMQConnection.AddRPCQueue(RPCQueueStruct{
+		Exchange:   MYTHIC_EXCHANGE,
+		Queue:      MYTHIC_RPC_CALLBACK_EDGE_SEARCH,
+		RoutingKey: MYTHIC_RPC_CALLBACK_EDGE_SEARCH,
+		Handler:    processMythicRPCCallbackEdgeSearch,
+	})
+}
+
+// Endpoint: MYTHIC_RPC_CALLBACK_EDGE_SEARCH
+func MythicRPCCallbackEdgeSearch(input MythicRPCCallbackEdgeSearchMessage) MythicRPCCallbackEdgeSearchMessageResponse {
+	response := MythicRPCCallbackEdgeSearchMessageResponse{
+		Success: false,
+		Results: []MythicRPCCallbackEdgeSearchMessageResult{},
+	}
+
+	searchString := `SELECT 
+    		callbackgraphedge.*,
+    		c2.name "c2profile.name"
+			FROM callbackgraphedge
+			JOIN callback s on callbackgraphedge.source_id = s.id
+			JOIN callback d on callbackgraphedge.destination_id = d.id
+			JOIN c2profile c2 on callbackgraphedge.c2_profile_id = c2.id
+			WHERE (s.agent_callback_id=:agent_callback_id OR s.id=:id OR 
+			      d.agent_callback_id=:agent_callback_id OR d.id=:id)`
+
+	rows, err := database.DB.NamedQuery(searchString, databaseStructs.Callback{
+		ID:              input.AgentCallbackID,
+		AgentCallbackID: input.AgentCallbackUUID,
+	})
+	if err != nil {
+		logging.LogError(err, "Failed to search callback edge information")
+		response.Error = err.Error()
+		return response
+	}
+	searchResults := databaseStructs.Callbackgraphedge{}
+	defer rows.Close()
+	for rows.Next() {
+		result := MythicRPCCallbackEdgeSearchMessageResult{}
+		err = rows.StructScan(&searchResults)
+		if err != nil {
+			logging.LogError(err, "Failed to get row from callbacks for search")
+			continue
+		}
+		if input.SearchActiveEdgesOnly != nil && *input.SearchActiveEdgesOnly && searchResults.EndTimestamp.Valid {
+			// want to only search for active edges and this one has a valid end timestamp
+			continue
+		}
+		if input.SearchC2ProfileName != nil && *input.SearchC2ProfileName != searchResults.C2Profile.Name {
+			// looking for a specific c2 profile edge and this isn't it
+			continue
+		}
+		result.C2Profile = searchResults.C2Profile.Name
+		result.ID = searchResults.ID
+		result.EndTimestamp = searchResults.EndTimestamp.Time
+		result.StartTimestamp = searchResults.StartTimestamp
+		err = database.DB.Get(&result.Destination,
+			`SELECT * FROM callback WHERE id=$1`, searchResults.DestinationID)
+		if err != nil {
+			logging.LogError(err, "Failed to get callback edge information")
+		}
+		err = database.DB.Get(&result.Source,
+			`SELECT * FROM callback WHERE id=$1`, searchResults.SourceID)
+		if err != nil {
+			logging.LogError(err, "Failed to get callback edge information")
+		}
+		response.Results = append(response.Results, result)
+	}
+	response.Success = true
+	return response
+
+}
+func processMythicRPCCallbackEdgeSearch(msg amqp.Delivery) interface{} {
+	incomingMessage := MythicRPCCallbackEdgeSearchMessage{}
+	responseMsg := MythicRPCCallbackEdgeSearchMessageResponse{
+		Success: false,
+	}
+	if err := json.Unmarshal(msg.Body, &incomingMessage); err != nil {
+		logging.LogError(err, "Failed to unmarshal JSON into struct")
+		responseMsg.Error = err.Error()
+	} else {
+		return MythicRPCCallbackEdgeSearch(incomingMessage)
+	}
+	return responseMsg
+}

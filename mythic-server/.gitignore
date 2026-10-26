@@ -1,0 +1,49 @@
+# Mythic Server - Git Ignore
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Docker
+.docker/
+
+# Build artifacts
+mythic-cli
+*.exe
+*.dll
+*.so
+*.a
+
+# Logs
+*.log
+logs/
+
+# Database
+*.sqlite
+*.db
+
+# Node modules
+node_modules/
+
+# Build directories
+build/
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+data/
+volumes/
+
+# Temporary files
+*.tmp
+*.temp
