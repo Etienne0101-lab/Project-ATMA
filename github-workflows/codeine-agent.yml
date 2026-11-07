@@ -1,0 +1,145 @@
+# Project ATMA  Codeine Agent Mission (Serverless Backend)
+# 
+# INSTALL (manual, once): copy this file to .github/workflows/codeine-agent.yml
+# GitHub Apps cannot create workflow files directly, so this copy is manual.
+# 
+# TRIGGER: Actions tab -> "Codeine Agent Mission" -> Run workflow, OR from the
+# ATMA console's Missions tab (with a GitHub token saved locally in the
+# browser), OR: gh workflow run codeine-agent.yml -f mission_id=m1 -f prompt="..."
+# 
+# WHAT IT DOES: runs agent/codeine_assistant.py with secrets.PROJECT_ATMA as the
+# Groq key inside the runner, writes docs/backend/missions/<id>.json and
+# updates docs/backend/missions/index.json, then commits both.
+# 
+# WHAT IT NEVER DOES: print or commit the key; connect to a Mythic server;
+# build or deliver payloads.
+# 
+# This is the ENHANCED version that supports:
+# - All existing ATMA agent functionality
+# - NEW: Codeine-specific coding tasks
+# - NEW: Multi-language code generation and analysis
+# - NEW: Architecture-aware responses
+# - NEW: Enhanced error handling and validation
+#
+# Usage Examples:
+#   # General coding task
+#   gh workflow run codeine-agent.yml \
+#     -f mission_id=write-python-agent \
+#     -f prompt="Write a Mythic agent in Python with callback functionality" \
+#     -f kind=code_generation
+#   
+#   # Code analysis
+#   gh workflow run codeine-agent.yml \
+#     -f mission_id=analyze-http-c2 \
+#     -f prompt="Analyze the http C2 profile implementation for security issues" \
+#     -f kind=code_analysis \
+#     -f model=codeine-7b
+#   
+#   # Multi-language task
+#   gh workflow run codeine-agent.yml \
+#     -f mission_id=go-payload-builder \
+#     -f prompt="Create a Go-based payload builder for Mythic with x86 and ARM support" \
+#     -f kind=code_generation \
+#     -f language=go
+#
+
+name: Codeine Agent Mission
+on:
+  workflow_dispatch:
+    inputs:
+      mission_id:
+        description: "Mission id (letters, numbers, dashes, underscores)"
+        required: true
+        default: "codeine-mission-1"
+      prompt:
+        description: "Prompt for the Codeine agent"
+        required: true
+        default: "Write a Python script for Mythic payload analysis"
+      kind:
+        description: "Mission kind (analysis, code_generation, code_review, architecture, etc.)"
+        required: false
+        default: "code_generation"
+      model:
+        description: "Model to use (codeine-7b, DeepHat/DeepHat-V1-7B, llama-3.3-70b-versatile, etc.)"
+        required: false
+        default: "codeine-7b"
+      language:
+        description: "Primary language for code tasks (python, go, javascript, java, rust, etc.)"
+        required: false
+        default: ""
+      max_tokens:
+        description: "Maximum tokens to generate"
+        required: false
+        default: "2000"
+      temperature:
+        description: "Sampling temperature (0.0-1.0)"
+        required: false
+        default: "0.3"
+      backend:
+        description: "Backend to use (groq, edge, demo)"
+        required: false
+        default: "groq"
+
+permissions:
+  contents: write
+
+jobs:
+  codeine-mission:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Get full history for proper commits
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: "**/requirements*.txt"
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install aiohttp requests
+          # Install ollama package for Ollama backend support
+          pip install ollama || echo "Ollama package not available, using fallback"
+      
+      - name: Run Codeine agent
+        env:
+          GROQ_API_KEY: ${{ secrets.PROJECT_ATMA }}
+          CODEINE_EDGE_KEY: ${{ secrets.PROJECT_ATMA }}
+          ATMA_GATEWAY_TOKEN: ${{ secrets.ATMA_GATEWAY_TOKEN }}
+        run: |
+          # Set up output directory
+          mkdir -p docs/backend/missions
+          
+          # Run the Codeine assistant
+          python agent/codeine_assistant.py \
+            --mission "${{ inputs.mission_id }}" \
+            --kind "${{ inputs.kind }}" \
+            --model "${{ inputs.model }}" \
+            --backend "${{ inputs.backend }}" \
+            --max-tokens ${{ inputs.max_tokens }} \
+            --temperature ${{ inputs.temperature }} \
+            --prompt "${{ inputs.prompt }}" \
+            --out "docs/backend/missions/${{ inputs.mission_id }}.json"
+      
+      - name: Update missions index
+        run: |
+          node -e "
+          const fs=require('fs');
+          const dir='docs/backend/missions';
+          const files=fs.readdirSync(dir).filter(f=>f.endsWith('.json')&&f!=='index.json').sort();
+          const missions=files.map(f=>{try{const j=JSON.parse(fs.readFileSync(dir+'/'+f,'utf8'));return{mission:j.mission,kind:j.kind,model:j.model,source:j.source,backend:j.backend,completed_at:j.completed_at,prompt:j.prompt,output:(j.output||'').slice(0,2000)};}catch{return null;}}).filter(Boolean);
+          fs.writeFileSync(dir+'/index.json',JSON.stringify({missions,updated:new Date().toISOString()},null,2)+'\n');
+          "
+      
+      - name: Commit mission output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/backend/missions/
+          git diff --cached --quiet || git commit -m "Codeine mission ${{ inputs.mission_id }} (${{ inputs.kind }}) - ${{ inputs.prompt }}"
+          git push

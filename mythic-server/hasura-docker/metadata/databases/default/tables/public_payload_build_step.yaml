@@ -1,0 +1,101 @@
+table:
+  name: payload_build_step
+  schema: public
+object_relationships:
+  - name: payload
+    using:
+      foreign_key_constraint_on: payload_id
+  - name: payloadtype
+    using:
+      foreign_key_constraint_on: payloadtype_id
+select_permissions:
+  - role: developer
+    permission:
+      columns:
+        - step_success
+        - id
+        - payload_id
+        - payloadtype_id
+        - step_number
+        - step_description
+        - step_name
+        - step_stderr
+        - step_stdout
+        - end_time
+        - start_time
+      filter:
+        - payload:
+            operation_id:
+              _eq: X-Hasura-current-operation-id
+  - role: mythic_admin
+    permission:
+      columns:
+        - step_success
+        - id
+        - payload_id
+        - payloadtype_id
+        - step_number
+        - step_description
+        - step_name
+        - step_stderr
+        - step_stdout
+        - end_time
+        - start_time
+      filter:
+        - payload:
+            operation_id:
+              _eq: X-Hasura-current-operation-id
+  - role: operation_admin
+    permission:
+      columns:
+        - step_success
+        - id
+        - payload_id
+        - payloadtype_id
+        - step_number
+        - step_description
+        - step_name
+        - step_stderr
+        - step_stdout
+        - end_time
+        - start_time
+      filter:
+        - payload:
+            operation_id:
+              _eq: X-Hasura-current-operation-id
+  - role: operator
+    permission:
+      columns:
+        - step_success
+        - id
+        - payload_id
+        - payloadtype_id
+        - step_number
+        - step_description
+        - step_name
+        - step_stderr
+        - step_stdout
+        - end_time
+        - start_time
+      filter:
+        - payload:
+            operation_id:
+              _eq: X-Hasura-current-operation-id
+  - role: spectator
+    permission:
+      columns:
+        - step_success
+        - id
+        - payload_id
+        - payloadtype_id
+        - step_number
+        - step_description
+        - step_name
+        - step_stderr
+        - step_stdout
+        - end_time
+        - start_time
+      filter:
+        - payload:
+            operation_id:
+              _eq: X-Hasura-current-operation-id

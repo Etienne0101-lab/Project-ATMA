@@ -1,0 +1,92 @@
+# Project ATMA  Codeine Gateway Docker Image
+# 
+# This Dockerfile builds a production-ready container for the Codeine Gateway.
+# The gateway provides:
+# - Groq proxy (OpenAI-compatible)
+# - Ollama proxy for DeepHat/Codeine
+# - Codeine-specific endpoints for enhanced coding assistance
+# - Mythic integration endpoints
+# - Multi-model routing
+# - Prometheus metrics (optional)
+#
+# Build:
+#   docker build -t codeine-gateway -f Dockerfile.codeine-gateway .
+#
+# Run:
+#   docker run -d \
+#     --name codeine-gateway \
+#     -p 8787:8787 \
+#     -e ATMA_GATEWAY_TOKEN=your_secure_token \
+#     -e GROQ_API_KEY=your_groq_key \
+#     -e OLLAMA_URL=http://host.docker.internal:11434 \
+#     -e MYTHIC_URL=https://host.docker.internal:7443 \
+#     codeine-gateway
+#
+# For Docker Compose:
+#   See docker-compose.codeine-gateway.yml
+#
+# Environment Variables:
+#   ATMA_GATEWAY_TOKEN: Required gateway authentication token
+#   GROQ_API_KEY: Groq API key (optional, for Groq proxy)
+#   CODEINE_GROQ_KEY: Alternative Groq key for Codeine
+#   OLLAMA_URL: Ollama server URL (default: http://localhost:11434)
+#   MYTHIC_URL: Mythic server URL (default: https://127.0.0.1:7443)
+#   MYTHIC_INSECURE_TLS: Set to "1" to accept self-signed certs
+#   CODEINE_MODEL: Default Codeine model (default: codeine-7b)
+#   CODEINE_FALLBACK: Fallback model (default: DeepHat/DeepHat-V1-7B)
+#   MONITORING_ENABLED: Enable Prometheus metrics (default: false)
+#   METRICS_PORT: Port for metrics server (default: 9090)
+#   LOG_LEVEL: Logging level (debug, info, warn, error)
+#   GATEWAY_PORT: Port to listen on (default: 8787)
+#
+# Architecture:
+#   - Based on Node.js 20 (LTS)
+#   - Minimal dependencies
+#   - Non-root user for security
+#   - Health checks
+#   - Proper signal handling
+#
+
+# Use official Node.js LTS image
+FROM node:20-alpine
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV GATEWAY_PORT=8787
+ENV MONITORING_ENABLED=false
+ENV METRICS_PORT=9090
+ENV LOG_LEVEL=info
+
+# Create non-root user
+RUN addgroup -S codeine && adduser -S codeine -G codeine
+
+# Set working directory
+WORKDIR /home/codeine/app
+
+# Copy package files first for better caching
+COPY agent/codeine_gateway.mjs ./
+
+# Install dependencies (none needed for this single-file gateway)
+# The gateway uses only Node.js built-in modules
+
+# Copy the rest of the application
+COPY agent/codeine_gateway.mjs ./codeine_gateway.mjs
+
+# Set permissions
+RUN chown -R codeine:codeine /home/codeine/app
+
+# Switch to non-root user
+USER codeine
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${GATEWAY_PORT}/health || exit 1
+
+# Expose ports
+EXPOSE ${GATEWAY_PORT} ${METRICS_PORT}
+
+# Entrypoint
+ENTRYPOINT ["node", "./codeine_gateway.mjs"]
+
+# Allow overriding port via command line
+CMD ["${GATEWAY_PORT}"]

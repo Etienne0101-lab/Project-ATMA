@@ -1,0 +1,253 @@
+# Project ATMA  Codeine Gateway with Traefik Reverse Proxy
+#
+# This compose file adds Traefik as a reverse proxy with HTTPS support.
+# Use with: docker compose -f docker-compose.codeine-gateway.yml \
+#   -f docker-compose.codeine-gateway.traefik.yml up -d
+#
+# Architecture:
+#   ┌─────────────────────────────────────────────────────────────┐
+#   │                    Complete Production Stack                    │
+#   │                                                          │
+#   │   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐   │
+#   │   │   Client    │───▶│   Traefik   │───▶│   Gateway   │   │
+#   │   │ (Browser)   │    │ (Port 80/443)│    │ (Port 8787)│   │
+#   │   └─────────────┘    └─────────────┘    └─────────────┘   │
+#   │                          │                              │
+#   │                          │                              │
+#   │                          ▼                              ▼
+#   │                   ┌─────────────────────────────────────┐     │
+#   │                   │        External Network (HTTPS)        │     │
+#   │                   └─────────────────────────────────────┘     │
+#   │                                                          │
+#   │   ┌─────────────┐    ┌─────────────┐                       │
+#   │   │  Ollama     │    │   Mythic    │                       │
+#   │   │ (Port 11434)│    │ (Port 7443) │                       │
+#   │   └─────────────┘    └─────────────┘                       │
+#   │                                                          │
+#   └─────────────────────────────────────────────────────────────┘
+#
+# Security Features:
+#   - Automatic HTTPS via Let's Encrypt
+#   - Basic authentication (optional)
+#   - Rate limiting
+#   - IP whitelisting (optional)
+#   - Request logging
+#
+# Prerequisites:
+#   - Domain name pointing to your server
+#   - Email address for Let's Encrypt
+#   - Open ports 80 and 443 on your server
+#
+# Usage:
+#   # Create .env file with:
+#   TRAEFIK_DOMAIN=your-domain.com
+#   TRAEFIK_EMAIL=your-email@example.com
+#   TRAEFIK_BASIC_AUTH=htpasswd_hashed_password  # Optional
+#   
+#   # Start services
+#   docker compose -f docker-compose.codeine-gateway.yml \
+#     -f docker-compose.codeine-gateway.traefik.yml up -d
+#
+#   # Access via:
+#   https://your-domain.com
+#
+# Environment Variables:
+#   TRAEFIK_DOMAIN: Your domain name (required)
+#   TRAEFIK_EMAIL: Email for Let's Encrypt (required)
+#   TRAEFIK_BASIC_AUTH: Hashed password for basic auth (optional)
+#   TRAEFIK_RATE_LIMIT: Rate limit requests per second (default: 100)
+#
+
+version: '3.8'
+
+services:
+  # =========================================================================
+  # Traefik Reverse Proxy
+  # =========================================================================
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: unless-stopped
+    
+    # Ports
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Dashboard
+    
+    # Environment variables
+    environment:
+      - TZ=UTC
+    
+    # Volumes
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data/traefik/acme:/etc/traefik/acme
+      - ./data/traefik/logs:/var/log/traefik
+    
+    # Command
+    command:
+      - --api.insecure=true
+      - --api.dashboard=true
+      - --api.debug=true
+      
+      # Entrypoints
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      
+      # Certificates
+      - --certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_EMAIL:?err}
+      - --certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      
+      # Providers
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=codeine-network
+      
+      # Logging
+      - --log.level=INFO
+      - --accesslog=true
+      - --accesslog.filepath=/var/log/traefik/access.log
+      - --accesslog.format=json
+      
+      # Global rate limiting
+      - --entrypoints.websecure.ratelimit.average=100
+      - --entrypoints.websecure.ratelimit.burst=200
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    
+    # Network configuration
+    networks:
+      - codeine-network
+    
+    # Labels for Traefik itself
+    labels:
+      - "traefik.enable=true"
+      
+      # Dashboard
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${TRAEFIK_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.middlewares=auth@docker"
+      
+      # Basic auth middleware
+      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_BASIC_AUTH:-}"
+      
+      # Redirect HTTP to HTTPS
+      - "traefik.http.routers.http-catchall.rule=HostRegexp(`{any:.+}`)"
+      - "traefik.http.routers.http-catchall.entrypoints=web"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https@docker"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+  # =========================================================================
+  # Codeine Gateway (updated to work with Traefik)
+  # =========================================================================
+  codeine-gateway:
+    image: ghcr.io/etienne0101-lab/project-atma/codeine-gateway:latest
+    container_name: codeine-gateway
+    restart: unless-stopped
+    
+    environment:
+      - ATMA_GATEWAY_TOKEN=${ATMA_GATEWAY_TOKEN:?err}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OLLAMA_URL=http://ollama:11434
+      - MYTHIC_URL=${MYTHIC_URL:-https://127.0.0.1:7443}
+      - CODEINE_MODEL=${CODEINE_MODEL:-codeine-7b}
+      - MONITORING_ENABLED=true
+      - LOG_LEVEL=info
+    
+    # Don't expose ports directly - Traefik will handle it
+    # ports:
+    #   - "8787:8787"
+    
+    volumes:
+      - ./data/codeine-gateway:/home/codeine/app/data
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8787/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    
+    networks:
+      - codeine-network
+    
+    labels:
+      - "traefik.enable=true"
+      
+      # Gateway routing
+      - "traefik.http.routers.codeine-gateway.rule=Host(`${TRAEFIK_DOMAIN:-localhost}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.codeine-gateway.entrypoints=websecure"
+      - "traefik.http.routers.codeine-gateway.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.codeine-gateway.service=codeine-gateway"
+      
+      # Service definition
+      - "traefik.http.services.codeine-gateway.loadbalancer.server.port=8787"
+      
+      # Rate limiting
+      - "traefik.http.routers.codeine-gateway.middlewares=rate-limit@docker"
+      - "traefik.http.middlewares.rate-limit.ratelimit.average=10"
+      - "traefik.http.middlewares.rate-limit.ratelimit.burst=20"
+      
+      # IP whitelisting (optional)
+      - "traefik.http.routers.codeine-gateway.middlewares=ip-whitelist@docker"
+      - "traefik.http.middlewares.ip-whitelist.ipwhitelist.sourcerange=${TRAEFIK_IP_WHITELIST:-0.0.0.0/0}"
+
+  # =========================================================================
+  # Ollama Service (optional, include if using ollama compose file)
+  # =========================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_PORT=11434
+    
+    volumes:
+      - ollama-data:/root/.ollama
+    
+    networks:
+      - codeine-network
+
+# =========================================================================
+# Volumes
+# =========================================================================
+volumes:
+  ollama-data:
+    external: true
+    name: codeine-ollama-data
+
+# =========================================================================
+# Networks
+# =========================================================================
+networks:
+  codeine-network:
+    external: true
+    name: codeine-network

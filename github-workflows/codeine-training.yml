@@ -1,0 +1,217 @@
+# Project ATMA  Codeine Training Pipeline (Serverless)
+# 
+# INSTALL (manual, once): copy this file to .github/workflows/codeine-training.yml
+# 
+# WARNING: This workflow requires SIGNIFICANT resources:
+# - GPU runners (GitHub Actions does NOT provide GPUs)
+# - This workflow is designed for SELF-HOSTED runners with GPU support
+# - For most users, run the training pipeline locally or on a cloud VM with GPUs
+# 
+# For GitHub Actions (CPU-only, limited):
+# - Only the data collection and preprocessing stages will work
+# - Training will fail without GPU support
+# - Use this workflow for testing data collection/preprocessing only
+# 
+# For self-hosted runners with GPUs:
+# 1. Set up a self-hosted runner with GPU support
+# 2. Add the runner to your GitHub repository
+# 3. Ensure the runner has:
+#    - NVIDIA GPU with CUDA support
+#    - At least 24GB VRAM (for 7B model training)
+#    - At least 100GB disk space
+#    - Docker (for containerized training)
+# 4. Run this workflow on the self-hosted runner
+#
+# TRIGGER: Actions tab -> "Codeine Training" -> Run workflow, OR:
+#   gh workflow run codeine-training.yml -f stage=collect
+#   gh workflow run codeine-training.yml -f stage=preprocess
+#   gh workflow run codeine-training.yml -f stage=train
+#
+# WHAT IT DOES:
+# - collect: Download and extract training data from various sources
+# - preprocess: Clean, filter, and prepare data for training
+# - train: Fine-tune the Codeine model (requires GPU)
+# - evaluate: Test the trained model
+# - deploy: Export and deploy the model
+# - full: Run all stages (requires GPU for training)
+#
+# WHAT IT NEVER DOES:
+# - Print or commit API keys
+# - Connect to external services without proper authentication
+# - Train models on GitHub's CPU runners (will fail)
+#
+# Self-hosted runner requirements:
+# - Ubuntu 22.04 LTS (recommended)
+# - NVIDIA GPU with CUDA 12.x and cuDNN
+# - Docker 24.x+
+# - At least 32GB RAM
+# - At least 24GB GPU VRAM
+# - At least 200GB fast storage (NVMe SSD recommended)
+#
+
+name: Codeine Training Pipeline
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Pipeline stage to run (collect, preprocess, train, evaluate, deploy, full)"
+        required: true
+        default: "collect"
+      base_model:
+        description: "Base model to fine-tune"
+        required: false
+        default: "Qwen2.5-Coder-7B"
+      output_model:
+        description: "Output model name"
+        required: false
+        default: "codeine-7b"
+      languages:
+        description: "Comma-separated list of languages to include"
+        required: false
+        default: "python,go,javascript,java,c,cpp,csharp,rust,bash"
+      batch_size:
+        description: "Training batch size"
+        required: false
+        default: "4"
+      epochs:
+        description: "Number of training epochs"
+        required: false
+        default: "3"
+      use_lora:
+        description: "Use LoRA for training (true/false)"
+        required: false
+        default: "true"
+      push_to_hub:
+        description: "Push model to Hugging Face Hub (true/false)"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+jobs:
+  training:
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.stage == 'train' && 'self-hosted-gpu' || 'ubuntu-latest' }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git curl wget
+      
+      - name: Install PyTorch with CUDA
+        if: inputs.stage == 'train' || inputs.stage == 'full'
+        run: |
+          # Check if CUDA is available
+          if ! command -v nvcc &> /dev/null; then
+            echo "CUDA not found, installing PyTorch CPU version"
+            pip install torch --index-url https://download.pytorch.org/whl/cpu
+          else
+            echo "CUDA found, installing PyTorch with CUDA"
+            pip install torch --index-url https://download.pytorch.org/whl/cu118
+          fi
+          pip install torchvision torchaudio
+      
+      - name: Install training dependencies
+        if: inputs.stage == 'train' || inputs.stage == 'full' || inputs.stage == 'evaluate'
+        run: |
+          pip install --upgrade transformers datasets accelerate peft bitsandbytes
+          pip install wandb huggingface-hub scikit-learn
+      
+      - name: Install general dependencies
+        run: |
+          pip install aiohttp requests tqdm
+      
+      - name: Run data collection
+        if: inputs.stage == 'collect' || inputs.stage == 'full'
+        env:
+          CODEINE_DATA_DIR: ./data/codeine
+        run: |
+          mkdir -p ./data/codeine
+          python agent/codeine_training_pipeline.py --collect --languages ${{ inputs.languages }}
+      
+      - name: Commit collected data
+        if: inputs.stage == 'collect' || inputs.stage == 'full'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/codeine/
+          git diff --cached --quiet || git commit -m "Codeine training data collection"
+          git push
+      
+      - name: Run data preprocessing
+        if: inputs.stage == 'preprocess' || inputs.stage == 'full'
+        env:
+          CODEINE_DATA_DIR: ./data/codeine
+        run: |
+          python agent/codeine_training_pipeline.py --preprocess
+      
+      - name: Commit preprocessed data
+        if: inputs.stage == 'preprocess' || inputs.stage == 'full'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/codeine/
+          git diff --cached --quiet || git commit -m "Codeine training data preprocessing"
+          git push
+      
+      - name: Check GPU availability
+        if: inputs.stage == 'train' || inputs.stage == 'full'
+        run: |
+          python -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('CUDA device count:', torch.cuda.device_count())"
+      
+      - name: Run model training
+        if: inputs.stage == 'train' || inputs.stage == 'full'
+        env:
+          CODEINE_DATA_DIR: ./data/codeine
+          CODEINE_MODEL_DIR: ./models/codeine
+          CODEINE_BASE_MODEL: ${{ inputs.base_model }}
+          CODEINE_OUTPUT_MODEL: ${{ inputs.output_model }}
+          CODEINE_BATCH_SIZE: ${{ inputs.batch_size }}
+          CODEINE_EPOCHS: ${{ inputs.epochs }}
+          CODEINE_USE_LORA: ${{ inputs.use_lora }}
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+        run: |
+          python agent/codeine_training_pipeline.py --train \
+            --model ${{ inputs.output_model }} \
+            --batch-size ${{ inputs.batch_size }} \
+            --epochs ${{ inputs.epochs }}
+      
+      - name: Run model evaluation
+        if: inputs.stage == 'evaluate' || inputs.stage == 'full'
+        env:
+          CODEINE_MODEL_DIR: ./models/codeine
+          CODEINE_OUTPUT_MODEL: ${{ inputs.output_model }}
+        run: |
+          python agent/codeine_training_pipeline.py --evaluate
+      
+      - name: Run deployment
+        if: inputs.stage == 'deploy' || inputs.stage == 'full'
+        env:
+          CODEINE_MODEL_DIR: ./models/codeine
+          CODEINE_OUTPUT_MODEL: ${{ inputs.output_model }}
+          CODEINE_PUSH_TO_HUB: ${{ inputs.push_to_hub }}
+          HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+        run: |
+          python agent/codeine_training_pipeline.py --deploy \
+            --push ${{ inputs.push_to_hub == 'true' }}
+      
+      - name: Commit training artifacts
+        if: inputs.stage == 'train' || inputs.stage == 'full' || inputs.stage == 'evaluate' || inputs.stage == 'deploy'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add models/codeine/ output/codeine/ data/codeine/
+          git diff --cached --quiet || git commit -m "Codeine training artifacts update"
+          git push

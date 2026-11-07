@@ -1,0 +1,127 @@
+# Project ATMA  Codeine Gateway Docker Compose
+#
+# This Docker Compose file provides a complete, production-ready deployment
+# of the Codeine Gateway with all necessary services.
+#
+# Architecture:
+#   ┌─────────────────────────────────────────────────────────────┐
+#   │                    Codeine Gateway Stack                        │
+#   │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │
+#   │  │   Codeine        │  │   Ollama         │  │   Mythic     │ │
+#   │  │   Gateway        │  │   (Optional)      │  │   (Optional) │ │
+#   │  │   (Port 8787)    │  │   (Port 11434)   │  │   (Port 7443)│ │
+#   │  └────────┬────────┘  └────────┬────────┘  └──────┬──────┘ │
+#   │           │                  │                  │       │
+#   │           └──────────────────┴──────────────────┘       │
+#   │                          │                               │
+#   │                  ┌───────────────┐                        │
+#   │                  │  Reverse Proxy │                        │
+#   │                  │  (Traefik)     │                        │
+#   │                  └───────────────┘                        │
+#   │                                                          │
+#   └─────────────────────────────────────────────────────────────┘
+#
+# Services:
+#   1. codeine-gateway: Main gateway service (required)
+#   2. ollama: Local LLM inference server (optional)
+#   3. traefik: Reverse proxy with HTTPS (optional, for production)
+#
+# Usage:
+#   # Basic deployment (gateway only)
+#   docker compose -f docker-compose.codeine-gateway.yml up -d
+#
+#   # Full deployment (gateway + Ollama)
+#   docker compose -f docker-compose.codeine-gateway.yml -f docker-compose.codeine-gateway.ollama.yml up -d
+#
+#   # Production deployment (gateway + Ollama + Traefik)
+#   docker compose -f docker-compose.codeine-gateway.yml \
+#     -f docker-compose.codeine-gateway.ollama.yml \
+#     -f docker-compose.codeine-gateway.traefik.yml up -d
+#
+# Environment Variables:
+#   Create a .env file or set environment variables:
+#   
+#   ATMA_GATEWAY_TOKEN=your_secure_token
+#   GROQ_API_KEY=your_groq_api_key
+#   OLLAMA_URL=http://ollama:11434
+#   MYTHIC_URL=https://mythic.example.com
+#   CODEINE_MODEL=codeine-7b
+#
+# Security Notes:
+#   - Gateway binds to localhost by default
+#   - For external access, use Traefik with proper TLS
+#   - Never expose gateway ports directly to the internet
+#   - Use Tailscale or similar zero-trust networking for remote access
+#
+
+version: '3.8'
+
+services:
+  # =========================================================================
+  # Codeine Gateway Service
+  # =========================================================================
+  codeine-gateway:
+    image: ghcr.io/etienne0101-lab/project-atma/codeine-gateway:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.codeine-gateway
+    container_name: codeine-gateway
+    restart: unless-stopped
+    
+    # Environment variables
+    environment:
+      - ATMA_GATEWAY_TOKEN=${ATMA_GATEWAY_TOKEN:?err}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - CODEINE_GROQ_KEY=${CODEINE_GROQ_KEY:-}
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+      - MYTHIC_URL=${MYTHIC_URL:-https://127.0.0.1:7443}
+      - MYTHIC_INSECURE_TLS=${MYTHIC_INSECURE_TLS:-0}
+      - CODEINE_MODEL=${CODEINE_MODEL:-codeine-7b}
+      - CODEINE_FALLBACK=${CODEINE_FALLBACK:-DeepHat/DeepHat-V1-7B}
+      - MONITORING_ENABLED=${MONITORING_ENABLED:-false}
+      - METRICS_PORT=${METRICS_PORT:-9090}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - GATEWAY_PORT=${GATEWAY_PORT:-8787}
+    
+    # Ports
+    ports:
+      - "${GATEWAY_PORT:-8787}:${GATEWAY_PORT:-8787}"
+      - "${METRICS_PORT:-9090}:${METRICS_PORT:-9090}"
+    
+    # Volumes (for persistent storage if needed)
+    volumes:
+      - ./data/codeine-gateway:/home/codeine/app/data
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${GATEWAY_PORT:-8787}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    
+    # Network configuration
+    networks:
+      - codeine-network
+
+# =========================================================================
+# Networks
+# =========================================================================
+networks:
+  codeine-network:
+    driver: bridge
+    name: codeine-network

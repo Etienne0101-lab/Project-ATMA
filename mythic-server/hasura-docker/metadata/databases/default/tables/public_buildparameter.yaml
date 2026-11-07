@@ -1,0 +1,101 @@
+table:
+  name: buildparameter
+  schema: public
+object_relationships:
+  - name: payloadtype
+    using:
+      foreign_key_constraint_on: payload_type_id
+array_relationships:
+  - name: buildparameterinstances
+    using:
+      foreign_key_constraint_on:
+        column: build_parameter_id
+        table:
+          name: buildparameterinstance
+          schema: public
+select_permissions:
+  - role: developer
+    permission:
+      columns:
+        - choices
+        - crypto_type
+        - default_value
+        - deleted
+        - description
+        - format_string
+        - id
+        - name
+        - parameter_type
+        - payload_type_id
+        - randomize
+        - required
+        - verifier_regex
+      filter: {}
+  - role: mythic_admin
+    permission:
+      columns:
+        - choices
+        - crypto_type
+        - default_value
+        - deleted
+        - description
+        - format_string
+        - id
+        - name
+        - parameter_type
+        - payload_type_id
+        - randomize
+        - required
+        - verifier_regex
+      filter: {}
+  - role: operation_admin
+    permission:
+      columns:
+        - choices
+        - crypto_type
+        - default_value
+        - deleted
+        - description
+        - format_string
+        - id
+        - name
+        - parameter_type
+        - payload_type_id
+        - randomize
+        - required
+        - verifier_regex
+      filter: {}
+  - role: operator
+    permission:
+      columns:
+        - choices
+        - crypto_type
+        - default_value
+        - deleted
+        - description
+        - format_string
+        - id
+        - name
+        - parameter_type
+        - payload_type_id
+        - randomize
+        - required
+        - verifier_regex
+      filter: {}
+  - role: spectator
+    permission:
+      columns:
+        - choices
+        - crypto_type
+        - default_value
+        - deleted
+        - description
+        - format_string
+        - id
+        - name
+        - parameter_type
+        - payload_type_id
+        - randomize
+        - required
+        - verifier_regex
+      filter: {}

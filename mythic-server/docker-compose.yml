@@ -1,0 +1,208 @@
+version: '3.8'
+
+services:
+  # Mythic Server - Go-based backend
+  mythic_server:
+    build:
+      context: ./mythic-docker
+      dockerfile: Dockerfile
+    container_name: mythic_server
+    restart: unless-stopped
+    environment:
+      - MYTHIC_SERVER_BIND_LOCALHOST_ONLY=true
+      - MYTHIC_SERVER_PORT=17443
+      - MYTHIC_JWT_SECRET=supersecretjwtsupersecretjwt
+      - MYTHIC_ENCRYPTION_KEY=supersecretencryptionkeysuper
+      - MYTHIC_SERVER_COOKIE_NAME=mythic
+      - MYTHIC_SERVER_COOKIE_DOMAIN=localhost
+      - MYTHIC_SERVER_COOKIE_SECURE=false
+      - MYTHIC_SERVER_COOKIE_HTTP_ONLY=true
+      - MYTHIC_SERVER_COOKIE_SAME_SITE=lax
+      - MYTHIC_SERVER_MAX_FILE_DOWNLOAD_SIZE=1073741824
+      - MYTHIC_SERVER_MAX_FILE_UPLOAD_SIZE=1073741824
+      - MYTHIC_SERVER_FILE_MAX_SIZE=1073741824
+      - MYTHIC_SERVER_FILE_CHUNK_SIZE=4194304
+      - MYTHIC_SERVER_AGENT_SLEEP_SECONDS=5
+      - MYTHIC_SERVER_AGENT_JITTER_PERCENT=10
+      - MYTHIC_SERVER_AGENT_MAX_SLEEP_SECONDS=10
+      - MYTHIC_SERVER_AGENT_MIN_SLEEP_SECONDS=1
+    volumes:
+      - ./mythic-docker/src:/Mythic
+      - mythic_files:/Mythic/installed_files
+      - mythic_payloads:/Mythic/payloads
+      - mythic_agent_files:/Mythic/agent_files
+    networks:
+      - mythic_network
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "17443:17443"
+      - "17444:17444"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:17443/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Mythic React UI - Frontend
+  mythic_react:
+    build:
+      context: ./mythic-react-docker
+      dockerfile: Dockerfile
+    container_name: mythic_react
+    restart: unless-stopped
+    environment:
+      - MYTHIC_REACT_PORT=3000
+      - MYTHIC_SERVER_URL=http://mythic_server:17443
+      - MYTHIC_WS_URL=ws://mythic_server:17444
+    volumes:
+      - ./mythic-react-docker/mythic:/usr/share/nginx/html
+    networks:
+      - mythic_network
+    depends_on:
+      - mythic_server
+    ports:
+      - "7443:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL Database
+  postgres:
+    build:
+      context: ./postgres-docker
+      dockerfile: Dockerfile
+    container_name: mythic_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=mythic
+      - POSTGRES_PASSWORD=mythic
+      - POSTGRES_DB=mythic
+    volumes:
+      - mythic_postgres_data:/var/lib/postgresql/data
+      - ./postgres-docker/init:/docker-entrypoint-initdb.d
+    networks:
+      - mythic_network
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mythic -d mythic"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ - Message Broker
+  rabbitmq:
+    build:
+      context: ./rabbitmq-docker
+      dockerfile: Dockerfile
+    container_name: mythic_rabbitmq
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=mythic
+      - RABBITMQ_DEFAULT_PASS=mythic
+    volumes:
+      - mythic_rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - mythic_network
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Hasura - GraphQL Engine
+  hasura:
+    build:
+      context: ./hasura-docker
+      dockerfile: Dockerfile
+    container_name: mythic_hasura
+    restart: unless-stopped
+    environment:
+      - HASURA_GRAPHQL_DATABASE_URL=postgres://mythic:mythic@postgres:5432/mythic
+      - HASURA_GRAPHQL_ENABLE_CONSOLE=true
+      - HASURA_GRAPHQL_ADMIN_SECRET=mythic
+      - HASURA_GRAPHQL_JWT_SECRET={"type":"HS256", "key":"supersecretjwtsupersecretjwt"}
+      - HASURA_GRAPHQL_UNAUTHORIZED_ROLE=anonymous
+    volumes:
+      - ./hasura-docker/metadata:/metadata
+    networks:
+      - mythic_network
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx - Reverse Proxy
+  nginx:
+    build:
+      context: ./nginx-docker
+      dockerfile: Dockerfile
+    container_name: mythic_nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx-docker/config:/etc/nginx/conf.d
+    networks:
+      - mythic_network
+    depends_on:
+      - mythic_react
+      - mythic_server
+      - hasura
+    ports:
+      - "80:80"
+      - "443:443"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ATMA Gateway - Codeine Integration
+  atma_gateway:
+    build:
+      context: ../
+      dockerfile: Dockerfile.codeine-gateway
+    container_name: atma_gateway
+    restart: unless-stopped
+    environment:
+      - MYTHIC_SERVER_URL=http://mythic_server:17443
+      - MYTHIC_WS_URL=ws://mythic_server:17444
+      - ATMA_MYTHIC_URL=http://mythic_server:17443
+      - ATMA_GROQ_KEY=${ATMA_GROQ_KEY:-}
+      - ATMA_MODE=standalone
+    volumes:
+      - ../agent:/app/agent
+      - ../docs:/app/docs
+    networks:
+      - mythic_network
+    depends_on:
+      - mythic_server
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mythic_postgres_data:
+  mythic_rabbitmq_data:
+  mythic_files:
+  mythic_payloads:
+  mythic_agent_files:
+
+networks:
+  mythic_network:
+    driver: bridge

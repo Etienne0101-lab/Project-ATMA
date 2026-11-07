@@ -1,0 +1,218 @@
+server {
+    ${NGINX_USE_IPV4} listen      ${NGINX_BIND_IPV4}:${NGINX_PORT} ${NGINX_USE_SSL};
+    ${NGINX_USE_IPV6} listen      ${NGINX_BIND_IPV6}:${NGINX_PORT} ${NGINX_USE_SSL};
+    ssl_certificate      /etc/ssl/private/mythic-cert.crt;
+    ssl_certificate_key  /etc/ssl/private/mythic-ssl.key;
+    client_max_body_size ${NGINX_MAX_BODY_SIZE}; # allows file uploads up to 500 megabytes
+    ssl_session_timeout 1d;
+    absolute_redirect off;
+    # proxy connections to the new mythic_server
+    rewrite ^/login$ /new/login permanent;
+    rewrite ^/$ /new/login permanent;
+    include /etc/nginx/blockips.conf;
+    error_page 403 /error403.html;
+    location = /error403.html {
+        ssi on;
+        root /usr/share/nginx/html;
+        allow all;  # this is needed to render the page itself
+    }
+    location ~(/sockjs-node|/new/worker-javascript.js)  {
+        proxy_pass http://${MYTHIC_REACT_HOST}:${MYTHIC_REACT_PORT};
+         proxy_http_version 1.1;
+         proxy_set_header Upgrade $http_upgrade;
+         proxy_set_header Connection "upgrade";
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_redirect off;
+         proxy_set_header Host $http_host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto https;
+         proxy_set_header X-Forwarded-Port $server_port;
+         include /etc/nginx/blockips.conf;
+    }
+    location = /ws {
+        proxy_pass http://${MYTHIC_REACT_HOST}:${MYTHIC_REACT_PORT};
+         proxy_http_version 1.1;
+         proxy_set_header Upgrade $http_upgrade;
+         proxy_set_header Connection "upgrade";
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_redirect off;
+         proxy_set_header Host $http_host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto https;
+         proxy_set_header X-Forwarded-Port $server_port;
+         include /etc/nginx/blockips.conf;
+    }
+    location /new  {
+         proxy_pass http://${MYTHIC_REACT_HOST}:${MYTHIC_REACT_PORT}/;
+         proxy_http_version 1.1;
+         proxy_set_header Upgrade $http_upgrade;
+         proxy_set_header Connection "upgrade";
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_redirect off;
+         proxy_set_header Host $http_host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto https;
+         proxy_set_header X-Forwarded-Port $server_port;
+         include /etc/nginx/blockips.conf;
+    }
+    location /new/  {
+        proxy_pass http://${MYTHIC_REACT_HOST}:${MYTHIC_REACT_PORT}/new/;
+         proxy_http_version 1.1;
+         proxy_set_header Upgrade $http_upgrade;
+         proxy_set_header Connection "upgrade";
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_redirect off;
+         proxy_set_header Host $http_host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto https;
+         proxy_set_header X-Forwarded-Port $server_port;
+         include /etc/nginx/blockips.conf;
+    }
+
+     # proxy connections to the hasura graphql server
+     location /v1/ {
+         proxy_pass http://${HASURA_HOST}:${HASURA_PORT}/v1/;
+         proxy_http_version 1.1;
+         proxy_set_header Upgrade $http_upgrade;
+         proxy_set_header Connection "upgrade";
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_redirect off;
+         proxy_set_header Host $http_host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto https;
+         proxy_set_header X-Forwarded-Port $server_port;
+         include /etc/nginx/blockips.conf;
+     }
+     location /v1alpha1/ {
+         proxy_pass http://${HASURA_HOST}:${HASURA_PORT}/v1alpha1/;
+         proxy_http_version 1.1;
+         proxy_set_header Upgrade $http_upgrade;
+         proxy_set_header Connection "upgrade";
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_redirect off;
+         proxy_set_header Host $http_host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto https;
+         proxy_set_header X-Forwarded-Port $server_port;
+         include /etc/nginx/blockips.conf;
+     }
+     location /v2/ {
+         proxy_pass http://${HASURA_HOST}:${HASURA_PORT}/v2/;
+         proxy_http_version 1.1;
+         proxy_set_header Upgrade $http_upgrade;
+         proxy_set_header Connection "upgrade";
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_redirect off;
+         proxy_set_header Host $http_host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto https;
+         proxy_set_header X-Forwarded-Port $server_port;
+         include /etc/nginx/blockips.conf;
+     }
+     location /graphql/ {
+         proxy_pass http://${HASURA_HOST}:${HASURA_PORT}/v1/graphql;
+         proxy_http_version 1.1;
+         proxy_set_header Upgrade $http_upgrade;
+         proxy_set_header Connection "upgrade";
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_redirect off;
+         proxy_set_header Host $http_host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto https;
+         proxy_set_header X-Forwarded-Port $server_port;
+         include /etc/nginx/blockips.conf;
+     }
+     location /console/ {
+         proxy_pass http://${HASURA_HOST}:${HASURA_PORT}/console/;
+         proxy_http_version 1.1;
+         proxy_set_header Upgrade $http_upgrade;
+         proxy_set_header Connection "upgrade";
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_redirect off;
+         proxy_set_header Host $http_host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto https;
+         proxy_set_header X-Forwarded-Port $server_port;
+         include /etc/nginx/blockips.conf;
+     }
+     location ~(/api/rest|/api/swagger) {
+           proxy_pass http://${HASURA_HOST}:${HASURA_PORT};
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection "upgrade";
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_redirect off;
+           proxy_set_header Host $http_host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto https;
+           proxy_set_header X-Forwarded-Port $server_port;
+           include /etc/nginx/blockips.conf;
+       }
+     # proxy connections to the documentation container
+     location /docs/{
+         proxy_pass http://${DOCUMENTATION_HOST}:${DOCUMENTATION_PORT}/docs/;
+         proxy_http_version 1.1;
+         proxy_redirect off;
+         proxy_set_header Host $http_host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto https;
+         proxy_set_header X-Forwarded-Port $server_port;
+         include /etc/nginx/blockips.conf;
+     }
+     location /jupyter {
+         proxy_pass http://${JUPYTER_HOST}:${JUPYTER_PORT}/jupyter;
+         proxy_http_version 1.1;
+         proxy_set_header Upgrade $http_upgrade;
+         proxy_set_header Connection "upgrade";
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_redirect off;
+         proxy_set_header Host $http_host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto https;
+         proxy_set_header X-Forwarded-Port $server_port;
+         include /etc/nginx/blockips.conf;
+     }
+    location ~ /.*hot-update.js{
+        proxy_pass http://${MYTHIC_REACT_HOST}:${MYTHIC_REACT_PORT};
+        proxy_pass_request_headers on;
+        proxy_pass_request_body on;
+        proxy_http_version 1.1;
+        proxy_redirect off;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        include /etc/nginx/blockips.conf;
+    }
+    # proxy connections to the main mythic_server
+    location / {
+        proxy_pass http://${MYTHIC_SERVER_HOST}:${MYTHIC_SERVER_PORT};
+        proxy_pass_request_headers on;
+        proxy_pass_request_body on;
+        proxy_http_version 1.1;
+        proxy_redirect off;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Port $server_port;
+        include /etc/nginx/blockips.conf;
+    }
+}
+

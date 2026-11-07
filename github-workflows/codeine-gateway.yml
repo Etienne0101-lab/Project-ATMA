@@ -1,0 +1,224 @@
+# Project ATMA  Codeine Gateway Deployment
+# 
+# INSTALL (manual, once): copy this file to .github/workflows/codeine-gateway.yml
+# 
+# This workflow deploys the Codeine Gateway as a Docker container.
+# It builds the gateway image and can deploy to:
+# - Docker Hub
+# - GitHub Container Registry
+# - Self-hosted registry
+#
+# TRIGGER: Actions tab -> "Codeine Gateway Deployment" -> Run workflow, OR:
+#   gh workflow run codeine-gateway.yml -f deploy=true -f registry=docker-hub
+#
+# WHAT IT DOES:
+# - Builds the Codeine Gateway Docker image
+# - Tags it appropriately
+# - Pushes to the specified container registry
+# - Can deploy to a server via SSH (if configured)
+#
+# WHAT IT NEVER DOES:
+# - Expose gateway ports publicly
+# - Commit API keys or tokens
+# - Deploy without proper authentication
+#
+# Prerequisites:
+# - Docker installed on the runner
+# - Proper permissions to push to the registry
+# - For SSH deployment: SSH keys configured as secrets
+#
+# Usage Examples:
+#   # Build and push to Docker Hub
+#   gh workflow run codeine-gateway.yml \
+#     -f deploy=true \
+#     -f registry=docker-hub \
+#     -f registry_username=myuser \
+#     -f registry_token=${{ secrets.DOCKER_HUB_TOKEN }}
+#   
+#   # Build and push to GitHub Container Registry
+#   gh workflow run codeine-gateway.yml \
+#     -f deploy=true \
+#     -f registry=ghcr \
+#     -f registry_username=myuser
+#   
+#   # Build, push, and deploy to server
+#   gh workflow run codeine-gateway.yml \
+#     -f deploy=true \
+#     -f registry=ghcr \
+#     -f deploy_to_server=true \
+#     -f server_host=my-server.com \
+#     -f server_port=22 \
+#     -f server_user=root
+#
+
+name: Codeine Gateway Deployment
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Build the Docker image"
+        required: false
+        default: "true"
+      deploy:
+        description: "Deploy to container registry"
+        required: false
+        default: "true"
+      registry:
+        description: "Container registry (docker-hub, ghcr, custom)"
+        required: false
+        default: "ghcr"
+      registry_username:
+        description: "Registry username"
+        required: false
+        default: ""
+      image_name:
+        description: "Docker image name"
+        required: false
+        default: "codeine-gateway"
+      image_tag:
+        description: "Docker image tag"
+        required: false
+        default: "latest"
+      deploy_to_server:
+        description: "Deploy to server via SSH"
+        required: false
+        default: "false"
+      server_host:
+        description: "Server hostname or IP"
+        required: false
+        default: ""
+      server_port:
+        description: "Server SSH port"
+        required: false
+        default: "22"
+      server_user:
+        description: "Server SSH username"
+        required: false
+        default: "root"
+      gateway_port:
+        description: "Port to expose gateway on server"
+        required: false
+        default: "8787"
+      gateway_token:
+        description: "Gateway authentication token (will be passed as env var)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Login to Docker Hub
+        if: inputs.registry == 'docker-hub' && inputs.deploy == 'true'
+        uses: docker/login-action@v2
+        with:
+          username: ${{ inputs.registry_username }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+      
+      - name: Login to GitHub Container Registry
+        if: inputs.registry == 'ghcr' && inputs.deploy == 'true'
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Login to custom registry
+        if: inputs.registry == 'custom' && inputs.deploy == 'true'
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ secrets.REGISTRY_URL }}
+          username: ${{ inputs.registry_username }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+      
+      - name: Determine registry URL
+        id: registry
+        run: |
+          if [ "${{ inputs.registry }}" = "docker-hub" ]; then
+            echo "url=docker.io" >> $GITHUB_OUTPUT
+            echo "prefix=" >> $GITHUB_OUTPUT
+          elif [ "${{ inputs.registry }}" = "ghcr" ]; then
+            echo "url=ghcr.io" >> $GITHUB_OUTPUT
+            echo "prefix=ghcr.io/" >> $GITHUB_OUTPUT
+          else
+            echo "url=${{ secrets.REGISTRY_URL }}" >> $GITHUB_OUTPUT
+            echo "prefix=${{ secrets.REGISTRY_URL }}/" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Build Docker image
+        if: inputs.build == 'true'
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile.codeine-gateway
+          push: false
+          tags: ${{ steps.registry.outputs.prefix }}${{ github.repository }}/${{ inputs.image_name }}:${{ inputs.image_tag }}
+          build-args: |
+            GATEWAY_PORT=${{ inputs.gateway_port }}
+      
+      - name: Push Docker image
+        if: inputs.deploy == 'true'
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile.codeine-gateway
+          push: true
+          tags: ${{ steps.registry.outputs.prefix }}${{ github.repository }}/${{ inputs.image_name }}:${{ inputs.image_tag }}
+          build-args: |
+            GATEWAY_PORT=${{ inputs.gateway_port }}
+      
+      - name: Deploy to server via SSH
+        if: inputs.deploy_to_server == 'true'
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ inputs.server_host }}
+          username: ${{ inputs.server_user }}
+          port: ${{ inputs.server_port }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Stop existing container
+            docker stop codeine-gateway || true
+            docker rm codeine-gateway || true
+            
+            # Pull the image
+            docker pull ${{ steps.registry.outputs.prefix }}${{ github.repository }}/${{ inputs.image_name }}:${{ inputs.image_tag }}
+            
+            # Run the container
+            docker run -d \
+              --name codeine-gateway \
+              --restart unless-stopped \
+              -p ${{ inputs.gateway_port }}:${{ inputs.gateway_port }} \
+              -e ATMA_GATEWAY_TOKEN=${{ inputs.gateway_token || secrets.ATMA_GATEWAY_TOKEN }} \
+              -e GROQ_API_KEY=${{ secrets.PROJECT_ATMA }} \
+              -e OLLAMA_URL=http://localhost:11434 \
+              -e MYTHIC_URL=https://127.0.0.1:7443 \
+              -e CODEINE_MODEL=codeine-7b \
+              ${{ steps.registry.outputs.prefix }}${{ github.repository }}/${{ inputs.image_name }}:${{ inputs.image_tag }}
+            
+            # Verify it's running
+            sleep 5
+            docker ps | grep codeine-gateway
+      
+      - name: Output deployment info
+        run: |
+          echo "Codeine Gateway Deployment Summary"
+          echo "===================================="
+          echo "Image: ${{ steps.registry.outputs.prefix }}${{ github.repository }}/${{ inputs.image_name }}:${{ inputs.image_tag }}"
+          echo "Registry: ${{ inputs.registry }}"
+          echo "Deployed to registry: ${{ inputs.deploy }}"
+          if [ "${{ inputs.deploy_to_server }}" = "true" ]; then
+            echo "Deployed to server: ${{ inputs.server_host }}"
+            echo "Gateway port: ${{ inputs.gateway_port }}"
+            echo "Access via: http://${{ inputs.server_host }}:${{ inputs.gateway_port }}"
+          fi
